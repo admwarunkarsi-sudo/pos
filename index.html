@@ -3,141 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Warunk Arsi - Pusat Kendali POS Kasir</title>
+    <title>Warunk Arsi POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-gray-100 text-gray-800 p-4 font-sans">
+<body class="bg-gray-50 font-sans text-gray-900">
 
-    <div class="max-w-6xl mx-auto space-y-6">
-        <div class="flex flex-col sm:flex-row justify-between items-center bg-emerald-700 text-white p-4 rounded-2xl shadow gap-4">
-            <div class="flex items-center space-x-3">
-                <i class="fa-solid fa-cash-register text-2xl text-amber-300"></i>
-                <div>
-                    <h1 class="text-xl font-bold font-mono tracking-wide">WARUNK ARSI PUSAT KENDALI</h1>
-                    <p class="text-xs text-emerald-200">Sistem Kasir & Sinkronisasi Member Cloud</p>
-                </div>
-            </div>
-            <div class="flex space-x-2 text-xs">
-                <button onclick="switchTab('antrean')" id="tab-antrean" class="bg-amber-500 text-white font-bold px-4 py-2 rounded-xl shadow">Antrean & Member</button>
-                <button onclick="switchTab('manajemen')" id="tab-manajemen" class="bg-emerald-800 hover:bg-emerald-900 text-white font-bold px-4 py-2 rounded-xl">Kelola Menu & Pengumuman</button>
-            </div>
+    <header class="bg-emerald-700 text-white p-5 shadow-lg">
+        <div class="max-w-5xl mx-auto flex justify-between items-center">
+            <h1 class="font-bold text-lg tracking-wider">WARUNK ARSI POS</h1>
+            <button onclick="location.reload()" class="bg-emerald-800 px-4 py-1.5 rounded-lg text-xs font-semibold">Refresh Data</button>
         </div>
+    </header>
 
-        <div id="panel-antrean" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="lg:col-span-2 space-y-3">
-                <h2 class="font-bold text-gray-700 flex items-center gap-2 text-sm uppercase"><i class="fa-solid fa-clock text-amber-500 animate-pulse"></i> Pesanan Masuk Real-Time</h2>
-                <div id="kasir-orders-list" class="space-y-3"></div>
-            </div>
-            <div class="bg-white p-4 rounded-2xl shadow-sm border text-xs h-[500px] flex flex-col">
-                <h3 class="font-bold text-gray-700 border-b pb-2 mb-3 uppercase flex justify-between"><span>Poin Member VVIP</span> <button onclick="loadData()" class="text-emerald-600 hover:underline">Refresh</button></h3>
-                <div id="kasir-members-list" class="space-y-2 flex-1 overflow-y-auto"></div>
-            </div>
-        </div>
+    <main class="max-w-5xl mx-auto p-4">
+        <div id="loading" class="text-center py-10 text-gray-500">Memuat data...</div>
+        <div id="order-container" class="grid gap-4"></div>
+    </main>
 
-        <div id="panel-manajemen" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
-            </div>
-    </div>
-
-    <div id="modal-detail-pesanan" class="fixed inset-0 bg-black/50 z-50 hidden justify-center items-center p-4">
-        <div class="bg-white rounded-2xl w-full max-w-md shadow-xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div id="modal-header-bg" class="bg-emerald-700 text-white p-4 flex justify-between items-center">
-                <div>
-                    <span id="modal-order-id" class="bg-white/20 text-white font-mono font-bold text-xs px-2 py-0.5 rounded">ID: -</span>
-                    <h3 id="modal-member-name" class="font-bold text-base mt-1">-</h3>
-                </div>
-                <button onclick="closeOrderModal()" class="text-white/80 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="p-5 flex-1 overflow-y-auto space-y-4 text-xs">
-                <div id="modal-items-list" class="mt-2 divide-y divide-gray-100"></div>
-                <div class="bg-gray-50 p-2 rounded-lg border">
-                    <p class="text-[9px] text-gray-400 font-bold uppercase">Catatan:</p>
-                    <p id="modal-order-note" class="font-medium text-gray-700 text-[11px]"></p>
-                </div>
-            </div>
-            <div class="bg-gray-50 p-4 border-t flex justify-between gap-2">
-                <button id="modal-btn-cancel" class="bg-red-100 text-red-600 hover:bg-red-200 font-bold px-4 py-2.5 rounded-xl text-xs transition cursor-pointer">
-                    <i class="fa-solid fa-ban"></i> Batalkan Pesanan
-                </button>
-                <div class="flex gap-2">
-                    <button onclick="closeOrderModal()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-4 py-2.5 rounded-xl text-xs">Tutup</button>
-                    <button id="modal-btn-action" class="bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-sm">Selesai</button>
-                </div>
+    <div id="modal" class="fixed inset-0 bg-black/50 hidden flex justify-center items-center p-4 z-50">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+            <h2 id="modal-title" class="font-bold text-lg mb-4">Detail Pesanan</h2>
+            <div id="modal-body" class="text-sm text-gray-600 mb-6"></div>
+            <div class="flex gap-3">
+                <button onclick="tutupModal()" class="flex-1 bg-gray-200 py-2 rounded-xl font-bold">Tutup</button>
+                <button id="btn-batal" class="flex-1 bg-red-500 text-white py-2 rounded-xl font-bold">Batalkan</button>
             </div>
         </div>
     </div>
 
     <script>
-        const SUPABASE_URL = "https://tcaizfemtfmfeuutgbct.supabase.co";
-        const SUPABASE_ANON_KEY = "sb_publishable_3SBNDNn6tk9Ssl6dZOxi6Q_e2ZFFH14";
-        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        let currentOrdersCache = [];
+        const supabase = supabase.createClient('https://tcaizfemtfmfeuutgbct.supabase.co', 'sb_publishable_3SBNDNn6tk9Ssl6dZOxi6Q_e2ZFFH14');
 
-        async function fetchOrders() {
-            const { data: orders } = await _supabase.from('orders').select('*').eq('status', 'Antrean').order('created_at', { ascending: false });
-            const container = document.getElementById('kasir-orders-list');
-            if(!orders || orders.length === 0) {
-                container.innerHTML = '<p class="text-gray-400 bg-white p-6 rounded-2xl border text-center shadow-sm">Belum ada orderan masuk.</p>';
-                return;
-            }
-            currentOrdersCache = orders;
-            container.innerHTML = orders.map(order => `
-                <div onclick="openOrderModal('${order.order_id}')" class="bg-white border-l-4 border-emerald-600 p-4 rounded-xl shadow-sm flex justify-between items-center cursor-pointer hover:bg-emerald-50">
-                    <div>
-                        <span class="font-mono font-bold text-xs bg-emerald-100 px-2 py-0.5 rounded">${order.order_id}</span>
-                        <span class="font-bold text-sm text-gray-800 ml-2">${order.member_name}</span>
-                        <p class="text-[10px] text-gray-400 mt-1">Catatan: ${order.catatan || '-'}</p>
-                    </div>
-                    <p class="font-black text-emerald-700 text-xs">Rp ${order.total_harga.toLocaleString('id-ID')}</p>
-                </div>
-            `).join('');
-        }
-
-        function openOrderModal(orderId) {
-            const order = currentOrdersCache.find(o => o.order_id === orderId);
-            document.getElementById('modal-order-id').innerText = order.order_id;
-            document.getElementById('modal-member-name').innerText = order.member_name;
-            document.getElementById('modal-order-note').innerText = order.catatan || 'Tidak ada catatan';
-            document.getElementById('modal-items-list').innerHTML = order.detail_items.map(i => `<div class="flex justify-between py-1"><span>${i.nama} (x${i.qty})</span><span>Rp ${i.harga.toLocaleString('id-ID')}</span></div>`).join('');
-            document.getElementById('modal-btn-cancel').onclick = () => batalkanOrder(order.id, order.member_id, order.detail_items, (order.total_harga === 0));
-            document.getElementById('modal-btn-action').onclick = () => selesaikanOrder(order.id, order.member_id, order.total_harga, (order.total_harga === 0));
-            document.getElementById('modal-detail-pesanan').classList.remove('hidden');
-        }
-
-        function closeOrderModal() { document.getElementById('modal-detail-pesanan').classList.add('hidden'); }
-
-        async function batalkanOrder(dbId, memberId, detailItems, isReward) {
-            if(!confirm('Yakin ingin membatalkan pesanan ini?')) return;
-            await _supabase.from('orders').update({ status: 'Batal' }).eq('id', dbId);
+        async function loadOrders() {
+            document.getElementById('loading').classList.remove('hidden');
+            const { data, error } = await supabase.from('orders').select('*').eq('status', 'Antrean').order('created_at', { ascending: false });
             
-            // Refund poin jika itu reward
-            if (isReward) {
-                const rewardItem = detailItems[0];
-                const cleanName = rewardItem.nama.replace(' (Free Poin)', '');
-                const { data: menu } = await _supabase.from('menu').select('butuh_poin').eq('nama', cleanName).single();
-                const { data: member } = await _supabase.from('members').select('poin').eq('id', memberId).single();
-                if(menu && member) await _supabase.from('members').update({ poin: member.poin + menu.butuh_poin }).eq('id', memberId);
+            document.getElementById('loading').classList.add('hidden');
+            const container = document.getElementById('order-container');
+            container.innerHTML = '';
+
+            if (data && data.length > 0) {
+                data.forEach(order => {
+                    const div = document.createElement('div');
+                    div.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center";
+                    div.innerHTML = `
+                        <div>
+                            <p class="font-bold text-sm">#${order.order_id} - ${order.member_name}</p>
+                            <p class="text-xs text-gray-500">Total: Rp ${order.total_harga.toLocaleString()}</p>
+                        </div>
+                        <button onclick="bukaModal('${order.order_id}', '${order.id}')" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-bold">Detail</button>
+                    `;
+                    container.appendChild(div);
+                });
+            } else {
+                container.innerHTML = '<p class="text-center text-gray-400 py-10">Antrean kosong.</p>';
             }
-            
-            alert('Pesanan Dibatalkan!');
-            closeOrderModal();
-            fetchOrders();
         }
 
-        async function selesaikanOrder(dbId, memberId, total, isReward) {
-            await _supabase.from('orders').update({ status: 'Selesai' }).eq('id', dbId);
-            if (!isReward) {
-                const { data: m } = await _supabase.from('members').select('poin').eq('id', memberId).single();
-                await _supabase.from('members').update({ poin: m.poin + Math.floor(total/10000) }).eq('id', memberId);
-            }
-            alert('Selesai!');
-            closeOrderModal();
-            fetchOrders();
+        function bukaModal(id, dbId) {
+            document.getElementById('modal').classList.remove('hidden');
+            document.getElementById('modal-title').innerText = "Pesanan #" + id;
+            document.getElementById('btn-batal').onclick = () => batalkan(dbId);
         }
-        
-        function loadData() { fetchOrders(); }
-        window.onload = () => { loadData(); setInterval(fetchOrders, 5000); };
+
+        function tutupModal() { document.getElementById('modal').classList.add('hidden'); }
+
+        async function batalkan(dbId) {
+            if(!confirm('Beneran mau dibatalin?')) return;
+            await supabase.from('orders').update({ status: 'Batal' }).eq('id', dbId);
+            tutupModal();
+            loadOrders();
+        }
+
+        loadOrders();
+        setInterval(loadOrders, 10000); // Auto refresh 10 detik
     </script>
 </body>
 </html>
