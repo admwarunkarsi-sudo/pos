@@ -2,83 +2,67 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Warunk Arsi POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-gray-50 font-sans text-gray-900">
-
-    <header class="bg-emerald-700 text-white p-5 shadow-lg">
-        <div class="max-w-5xl mx-auto flex justify-between items-center">
-            <h1 class="font-bold text-lg tracking-wider">WARUNK ARSI POS</h1>
-            <button onclick="location.reload()" class="bg-emerald-800 px-4 py-1.5 rounded-lg text-xs font-semibold">Refresh Data</button>
+<body class="bg-gray-100">
+    <header class="bg-emerald-700 p-4 text-white shadow">
+        <div class="max-w-4xl mx-auto flex justify-between">
+            <h1 class="font-bold">WARUNK ARSI POS</h1>
+            <button onclick="location.reload()" class="bg-emerald-800 px-3 py-1 rounded text-xs">Refresh</button>
         </div>
     </header>
 
-    <main class="max-w-5xl mx-auto p-4">
-        <div id="loading" class="text-center py-10 text-gray-500">Memuat data...</div>
-        <div id="order-container" class="grid gap-4"></div>
-    </main>
-
-    <div id="modal" class="fixed inset-0 bg-black/50 hidden flex justify-center items-center p-4 z-50">
-        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-            <h2 id="modal-title" class="font-bold text-lg mb-4">Detail Pesanan</h2>
-            <div id="modal-body" class="text-sm text-gray-600 mb-6"></div>
-            <div class="flex gap-3">
-                <button onclick="tutupModal()" class="flex-1 bg-gray-200 py-2 rounded-xl font-bold">Tutup</button>
-                <button id="btn-batal" class="flex-1 bg-red-500 text-white py-2 rounded-xl font-bold">Batalkan</button>
-            </div>
+    <main class="max-w-4xl mx-auto p-4">
+        <div id="order-list" class="space-y-3">
+            <!-- Orderan bakal muncul di sini -->
         </div>
-    </div>
+    </main>
 
     <script>
         const supabase = supabase.createClient('https://tcaizfemtfmfeuutgbct.supabase.co', 'sb_publishable_3SBNDNn6tk9Ssl6dZOxi6Q_e2ZFFH14');
 
-        async function loadOrders() {
-            document.getElementById('loading').classList.remove('hidden');
-            const { data, error } = await supabase.from('orders').select('*').eq('status', 'Antrean').order('created_at', { ascending: false });
-            
-            document.getElementById('loading').classList.add('hidden');
-            const container = document.getElementById('order-container');
-            container.innerHTML = '';
+        async function initPOS() {
+            const listDiv = document.getElementById('order-list');
+            listDiv.innerHTML = "Memuat data...";
 
-            if (data && data.length > 0) {
-                data.forEach(order => {
-                    const div = document.createElement('div');
-                    div.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center";
-                    div.innerHTML = `
-                        <div>
-                            <p class="font-bold text-sm">#${order.order_id} - ${order.member_name}</p>
-                            <p class="text-xs text-gray-500">Total: Rp ${order.total_harga.toLocaleString()}</p>
-                        </div>
-                        <button onclick="bukaModal('${order.order_id}', '${order.id}')" class="bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-bold">Detail</button>
-                    `;
-                    container.appendChild(div);
-                });
-            } else {
-                container.innerHTML = '<p class="text-center text-gray-400 py-10">Antrean kosong.</p>';
+            // Ambil semua order, filter status 'Antrean'
+            const { data, error } = await supabase
+                .from('orders')
+                .select('*')
+                .eq('status', 'Antrean')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                listDiv.innerHTML = "Error database: " + error.message;
+                return;
             }
+
+            if (!data || data.length === 0) {
+                listDiv.innerHTML = "<div class='bg-white p-4 rounded shadow'>Belum ada pesanan baru.</div>";
+                return;
+            }
+
+            listDiv.innerHTML = data.map(order => `
+                <div class="bg-white p-4 rounded shadow flex justify-between items-center">
+                    <div>
+                        <p class="font-bold">#${order.order_id} - ${order.member_name}</p>
+                        <p class="text-xs text-gray-500">Total: Rp ${order.total_harga.toLocaleString()}</p>
+                    </div>
+                    <button onclick="batalkan('${order.id}')" class="bg-red-500 text-white px-3 py-1 rounded text-xs font-bold">Batalkan</button>
+                </div>
+            `).join('');
         }
 
-        function bukaModal(id, dbId) {
-            document.getElementById('modal').classList.remove('hidden');
-            document.getElementById('modal-title').innerText = "Pesanan #" + id;
-            document.getElementById('btn-batal').onclick = () => batalkan(dbId);
+        async function batalkan(id) {
+            if(!confirm('Yakin batalkan pesanan ini?')) return;
+            const { error } = await supabase.from('orders').update({ status: 'Batal' }).eq('id', id);
+            if(error) alert('Gagal: ' + error.message);
+            else initPOS();
         }
 
-        function tutupModal() { document.getElementById('modal').classList.add('hidden'); }
-
-        async function batalkan(dbId) {
-            if(!confirm('Beneran mau dibatalin?')) return;
-            await supabase.from('orders').update({ status: 'Batal' }).eq('id', dbId);
-            tutupModal();
-            loadOrders();
-        }
-
-        loadOrders();
-        setInterval(loadOrders, 10000); // Auto refresh 10 detik
+        initPOS();
     </script>
 </body>
 </html>
