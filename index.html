@@ -284,54 +284,43 @@
         }
 
         async function fetchOrders() {
-    // Mengambil order yang statusnya TIDAK SAMA DENGAN 'Selesai'
     const { data: orders, error } = await _supabase
         .from('orders')
         .select('*')
-        .neq('status', 'Selesai')
+        .eq('status', 'Antrean') // HANYA ANTREAN
         .order('created_at', { ascending: false });
 
     const container = document.getElementById('kasir-orders-list');
     
-    if (error) {
-        console.error("Error fetching orders:", error);
-        return;
-    }
+    if (error) { console.error("Error:", error); return; }
     
     if(!orders || orders.length === 0) {
         currentOrdersCache = [];
-        container.innerHTML = '<p class="text-gray-400 bg-white p-6 rounded-2xl border text-center shadow-sm">Belum ada orderan masuk yang perlu diproses.</p>';
+        container.innerHTML = '<p class="text-gray-400 bg-white p-6 rounded-2xl border text-center shadow-sm">Belum ada orderan masuk.</p>';
         return;
     }
     
     currentOrdersCache = orders; 
-
     container.innerHTML = orders.map(order => {
         const isReward = order.total_harga === 0 || order.order_id.startsWith('REWARD');
         const borderClass = isReward ? 'border-amber-500 bg-amber-50/40' : 'border-emerald-600 bg-white';
         
         return `
-            <div onclick="openOrderModal('${order.order_id}')" class="bg-white border-l-4 ${borderClass} p-4 rounded-xl shadow-sm flex justify-between items-center cursor-pointer transition hover:scale-[1.01]">
+            <div onclick="openOrderModal('${order.order_id}')" class="border-l-4 ${borderClass} p-4 rounded-xl shadow-sm flex justify-between items-center cursor-pointer transition hover:scale-[1.01]">
                 <div>
                     <div class="flex items-center gap-2">
-                        <span class="${isReward ? 'bg-amber-500 text-white' : 'bg-emerald-100 text-emerald-800'} font-mono font-bold text-xs px-2 py-0.5 rounded">
-                            ${order.order_id}
-                        </span>
+                        <span class="${isReward ? 'bg-amber-500 text-white' : 'bg-emerald-100 text-emerald-800'} font-mono font-bold text-xs px-2 py-0.5 rounded">${order.order_id}</span>
                         <span class="font-bold text-sm text-gray-800">${order.member_name}</span>
-                        <span class="text-[10px] font-bold text-gray-400 uppercase">(${order.status})</span>
                     </div>
-                    <p class="text-[11px] text-gray-400 mt-1 truncate max-w-[200px]">Catatan: ${order.catatan || '-'}</p>
+                    <p class="text-[11px] text-gray-400 mt-1">Catatan: ${order.catatan || '-'}</p>
                 </div>
                 <div class="text-right">
-                    <p class="text-xs font-black ${isReward ? 'text-amber-600' : 'text-emerald-700'}">
-                        ${isReward ? 'FREE REWARD' : `Rp ${order.total_harga.toLocaleString('id-ID')}`}
-                    </p>
+                    <p class="text-xs font-black ${isReward ? 'text-amber-600' : 'text-emerald-700'}">${isReward ? 'FREE REWARD' : 'Rp ' + order.total_harga.toLocaleString('id-ID')}</p>
                 </div>
             </div>
         `;
     }).join('');
 }
-
         function openOrderModal(orderIdText) {
             const order = currentOrdersCache.find(o => o.order_id === orderIdText);
             if(!order) return;
@@ -406,47 +395,29 @@
         }
 
         // FUNGSI BARU: PEMBATALAN TRANSAKSI + SISTEM REFUND BALIKIN POIN OTOMATIS
-        async function batalkanOrder(dbId, memberId, detailItems, isReward) {
-            // 1. Update status orderan di tabel 'orders' menjadi 'Batal'
-            const { error: errUpdate } = await _supabase.from('orders').update({ status: 'Batal' }).eq('id', dbId);
-            
-            if(errUpdate) {
-                alert('Gagal memproses pembatalan ke cloud database.');
-                return;
+       async function batalkanOrder(dbId, memberId, detailItems, isReward) {
+    // Update status ke 'Batal'
+    const { error: errUpdate } = await _supabase.from('orders').update({ status: 'Batal' }).eq('id', dbId);
+    
+    if(errUpdate) { alert('Gagal memproses pembatalan.'); return; }
+
+    if (isReward) {
+        const rewardItem = detailItems[0];
+        const cleanMenuName = rewardItem.nama.replace(' (Free Poin)', '');
+        const { data: menuData } = await _supabase.from('menu').select('butuh_poin').eq('nama', cleanMenuName).single();
+        
+        if (menuData && menuData.butuh_poin > 0) {
+            const { data: memberData } = await _supabase.from('members').select('poin').eq('id', memberId).single();
+            if(memberData) {
+                await _supabase.from('members').update({ poin: memberData.poin + (menuData.butuh_poin * rewardItem.qty) }).eq('id', memberId);
             }
-
-            // 2. LOGIC REFUND: Jika orderan yang dibatalkan adalah hadiah VVIP (Tukar Poin)
-            if (isReward) {
-                // Cari menu di daftar item diorder untuk tahu berapa poin yang harus dibalikan
-                // Kita cari tau nama menu-nya, potong kata " (Free Poin)" jika ada untuk pelacakan
-                const rewardItem = detailItems[0];
-                if(rewardItem) {
-                    const cleanMenuName = rewardItem.nama.replace(' (Free Poin)', '');
-                    
-                    // Ambil data butuh_poin asli menu tersebut dari tabel menu
-                    const { data: menuData } = await _supabase.from('menu').select('butuh_poin').eq('nama', cleanMenuName).single();
-                    
-                    if (menuData && menuData.butuh_poin > 0) {
-                        const poinRefund = menuData.butuh_poin * rewardItem.qty;
-
-                        // Ambil poin member saat ini untuk ditambahkan poin refund-nya
-                        const { data: memberData } = await _supabase.from('members').select('poin').eq('id', memberId).single();
-                        
-                        if(memberData) {
-                            const poinTerbaru = memberData.poin + poinRefund;
-                            // Kembalikan poin ke akun member
-                            await _supabase.from('members').update({ poin: poinTerbaru }).eq('id', memberId);
-                            alert(`Pesanan Sukses Dibatalkan!\n\n⚠️ Ini adalah transaksi klaim hadiah, sistem otomatis melakukan REFUND pengembalian +${poinRefund} Poin ke akun member!`);
-                        }
-                    }
-                }
-            } else {
-                alert('Pesanan belanja normal berhasil dibatalkan dan dihapus dari antrean kasir!');
-            }
-
-            loadData(); // Reload seluruh view data kasir
         }
-
+    }
+    
+    alert('Pesanan berhasil dibatalkan dan dihapus dari antrean.');
+    closeOrderModal();
+    loadData(); // Memaksa refresh daftar antrean
+}
         async function fetchMembers() {
             const { data: members } = await _supabase.from('members').select('*').order('poin', { ascending: false });
             document.getElementById('kasir-members-list').innerHTML = (members || []).map(m => `
