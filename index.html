@@ -15,6 +15,12 @@
         button, a, input, select, textarea, [onclick] {
             touch-action: manipulation;
         }
+        /* Booster anti-zoom Safari iOS (iPhone) saat form input di-focus */
+        @media screen and (-webkit-min-device-pixel-ratio:0) { 
+            select, textarea, input[type="text"], input[type="number"] { 
+                font-size: 16px !important; 
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 p-4 font-sans">
