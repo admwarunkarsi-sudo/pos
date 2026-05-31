@@ -351,6 +351,12 @@
                     <span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-bold text-[11px]">x${item.qty} Pcs</span>
                 </div>
             `).join('');
+            itemsListContainer.innerHTML += `
+    <div class="bg-gray-50 p-3 rounded-xl border mt-2">
+        <p class="text-[9px] text-gray-400 font-bold uppercase">Catatan Pelanggan:</p>
+        <p class="text-xs font-medium text-gray-700">${order.catatan ? order.catatan : '-'}</p>
+    </div>
+`;
 
             document.getElementById('modal-total-price').innerText = isReward ? 'Rp 0 (Potong Poin)' : `Rp ${order.total_harga.toLocaleString('id-ID')}`;
 
@@ -366,7 +372,7 @@
                 const menuListText = order.detail_items.map(item => `- ${item.nama} (x${item.qty})`).join('\n');
                 const infoTotalHarga = isReward ? 'FREE (Klaim Reward Poin)' : `Rp ${order.total_harga.toLocaleString('id-ID')}`;
 
-                const waMessage = `Halo kak *${order.member_name}*,\n\nKami dari *Warunk Arsi* ingin mengonfirmasi pesanan kakak dengan rincian berikut:\n\n*ID Pesanan:* ${order.order_id}\n*Rincian Menu:*\n${menuListText}\n\n*Total Nota:* ${infoTotalHarga}\n*Poin Anda Saat Ini:* ${memberPoints} Poin\n\n*Metode Pembayaran:*\nSilakan pilih metode pembayaran saat mengambil pesanan:\n1. 💵 *Cash saat ambil*\n2. 📱 *QRIS*\n\nMohon kabari kami jika rincian di atas sudah sesuai ya kak. Terima kasih! 🙏✨`;
+                const waMessage = `Halo kak *${order.member_name}*,\n\nKami dari *Warunk Arsi* ingin mengonfirmasi pesanan kakak:\n\n*ID Pesanan:* ${order.order_id}\n*Rincian Menu:*\n${menuListText}\n\n*Catatan:* ${order.catatan ? order.catatan : '-'}\n\n*Total Nota:* ${infoTotalHarga}\n\nMohon kabari kami jika sudah sesuai ya kak. Terima kasih! 🙏✨`;
                 window.open(`https://api.whatsapp.com/send?phone=${cleanWa}&text=${encodeURIComponent(waMessage)}`, '_blank');
             };
 
