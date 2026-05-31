@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Warunk Arsi - Pusat Kendali POS Kasir</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -77,7 +77,6 @@
             <div class="lg:col-span-2 bg-white p-5 rounded-2xl border shadow-sm space-y-4">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-2 gap-2">
                     <h3 class="font-bold text-gray-700 uppercase flex items-center"><i class="fa-solid fa-utensils mr-1 text-emerald-600"></i> Master Menu & Kontrol Terintegrasi</h3>
-                    
                     <div class="relative w-full sm:w-64">
                         <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
                             <i class="fa-solid fa-magnifying-glass text-xs"></i>
@@ -128,9 +127,14 @@
                     <span id="modal-total-price" class="text-emerald-600 font-black text-sm">Rp 0</span>
                 </div>
             </div>
-            <div class="bg-gray-50 p-4 border-t flex justify-end gap-2">
-                <button onclick="closeOrderModal()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer">Batal</button>
-                <button id="modal-btn-action" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow-sm cursor-pointer">Selesai & Beri Poin</button>
+            <div class="bg-gray-50 p-4 border-t flex justify-between gap-2">
+                <button id="modal-btn-cancel" class="bg-red-100 text-red-600 hover:bg-red-200 font-bold px-4 py-2.5 rounded-xl text-xs transition cursor-pointer flex items-center gap-1">
+                    <i class="fa-solid fa-ban"></i> Batalkan Pesanan
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="closeOrderModal()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-4 py-2.5 rounded-xl text-xs transition cursor-pointer">Tutup</button>
+                    <button id="modal-btn-action" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition shadow-sm cursor-pointer">Selesai & Beri Poin</button>
+                </div>
             </div>
         </div>
     </div>
@@ -183,7 +187,7 @@
                 harga_normal: parseInt(harga), 
                 harga_flash_sale: parseInt(harga), 
                 is_flash_sale: 0, 
-                is_tersedia: tersedia, // Mengisi kolom is_tersedia bawaan Supabase
+                is_tersedia: tersedia, 
                 gambar_url: gambar
             }]);
 
@@ -201,13 +205,13 @@
             renderMenuTable(currentMenusCache);
         }
 
-        // Fungsi Render Data Menu ke Tabel dengan Live Filter
         function renderMenuTable(menusList) {
             const tbody = document.getElementById('kasir-menu-table');
             tbody.innerHTML = menusList.map(m => `
                 <tr class="hover:bg-gray-50">
                     <td class="p-3 space-y-1">
                         <div class="text-[10px] font-mono text-gray-400 font-bold">ID: ${m.id}</div>
+                        <img src="${m.gambar_url}" class="w-8 h-8 object-cover rounded mb-1 hidden sm:inline-block border">
                         <input type="text" id="name-${m.id}" value="${m.nama}" class="w-full font-bold border-b focus:outline-none focus:border-emerald-600 bg-transparent text-gray-700">
                         <div class="flex gap-1 text-[10px]">
                             <input type="text" id="kat-${m.id}" value="${m.kategori}" class="w-1/2 text-gray-400 uppercase bg-transparent border-b focus:outline-none">
@@ -236,7 +240,6 @@
             `).join('');
         }
 
-        // Logika Real-Time Search Bar
         function filterMenuTable() {
             const keyword = document.getElementById('search-menu-input').value.toLowerCase().trim();
             if(!keyword) {
@@ -258,7 +261,7 @@
             const hgNormal = document.getElementById(`price-${id}`).value;
             const hgFlash = document.getElementById(`fs-price-${id}`).value;
             const statusFs = document.getElementById(`status-fs-${id}`).value;
-            const statusTersedia = document.getElementById(`tersedia-${id}`).value === 'true'; // Membaca nilai True/False
+            const statusTersedia = document.getElementById(`tersedia-${id}`).value === 'true';
 
             await _supabase.from('menu').update({
                 nama: namaUbah, 
@@ -267,7 +270,7 @@
                 harga_normal: parseInt(hgNormal), 
                 harga_flash_sale: parseInt(hgFlash), 
                 is_flash_sale: parseInt(statusFs),
-                is_tersedia: statusTersedia // Update langsung ke kolom is_tersedia Supabase
+                is_tersedia: statusTersedia 
             }).eq('id', id);
 
             alert('Menu berhasil diupdate!');
@@ -280,7 +283,6 @@
             fetchMenuManagement();
         }
 
-        // ================= LOGIKA RENDER DAN KLIK BARIS KASIR =================
         async function fetchOrders() {
             const { data: orders } = await _supabase.from('orders').select('*').eq('status', 'Antrean').order('created_at', { ascending: true });
             const container = document.getElementById('kasir-orders-list');
@@ -321,13 +323,9 @@
 
         function openOrderModal(orderIdText) {
             const order = currentOrdersCache.find(o => o.order_id === orderIdText);
-            if(!order) {
-                console.error("Data orderan tidak ditemukan di cache untuk ID:", orderIdText);
-                return;
-            }
+            if(!order) return;
 
             const isReward = order.total_harga === 0 || order.order_id.startsWith('REWARD');
-            
             const headerBg = document.getElementById('modal-header-bg');
             if(isReward) {
                 headerBg.className = "bg-amber-500 text-white p-4 flex justify-between items-center";
@@ -354,22 +352,26 @@
             const waBtn = document.getElementById('modal-btn-whatsapp');
             waBtn.onclick = async () => {
                 let cleanWa = order.member_wa.replace(/[^0-9]/g, '');
-                if (cleanWa.startsWith('0')) {
-                    cleanWa = '62' + cleanWa.slice(1);
-                }
+                if (cleanWa.startsWith('0')) cleanWa = '62' + cleanWa.slice(1);
 
                 let memberPoints = 0;
                 const { data: memberData } = await _supabase.from('members').select('poin').eq('id', order.member_id).single();
-                if (memberData) {
-                    memberPoints = memberData.poin;
-                }
+                if (memberData) memberPoints = memberData.poin;
 
                 const menuListText = order.detail_items.map(item => `- ${item.nama} (x${item.qty})`).join('\n');
                 const infoTotalHarga = isReward ? 'FREE (Klaim Reward Poin)' : `Rp ${order.total_harga.toLocaleString('id-ID')}`;
 
                 const waMessage = `Halo kak *${order.member_name}*,\n\nKami dari *Warunk Arsi* ingin mengonfirmasi pesanan kakak dengan rincian berikut:\n\n*ID Pesanan:* ${order.order_id}\n*Rincian Menu:*\n${menuListText}\n\n*Total Nota:* ${infoTotalHarga}\n*Poin Anda Saat Ini:* ${memberPoints} Poin\n\n*Metode Pembayaran:*\nSilakan pilih metode pembayaran saat mengambil pesanan:\n1. 💵 *Cash saat ambil*\n2. 📱 *QRIS*\n\nMohon kabari kami jika rincian di atas sudah sesuai ya kak. Terima kasih! 🙏✨`;
-
                 window.open(`https://api.whatsapp.com/send?phone=${cleanWa}&text=${encodeURIComponent(waMessage)}`, '_blank');
+            };
+
+            // MODIFIKASI FITUR CANCEL UTK MENANGKAP TOMBOL BATALKAN PESANAN
+            const cancelBtn = document.getElementById('modal-btn-cancel');
+            cancelBtn.onclick = async () => {
+                if(confirm(`Yakin ingin MEMBATALKAN pesanan ${order.order_id} milik ${order.member_name}?`)) {
+                    await batalkanOrder(order.id, order.member_id, order.detail_items, isReward);
+                    closeOrderModal();
+                }
             };
 
             const actionBtn = document.getElementById('modal-btn-action');
@@ -390,6 +392,48 @@
             const modal = document.getElementById('modal-detail-pesanan');
             modal.classList.remove('flex');
             modal.classList.add('hidden');
+        }
+
+        // FUNGSI BARU: PEMBATALAN TRANSAKSI + SISTEM REFUND BALIKIN POIN OTOMATIS
+        async function batalkanOrder(dbId, memberId, detailItems, isReward) {
+            // 1. Update status orderan di tabel 'orders' menjadi 'Batal'
+            const { error: errUpdate } = await _supabase.from('orders').update({ status: 'Batal' }).eq('id', dbId);
+            
+            if(errUpdate) {
+                alert('Gagal memproses pembatalan ke cloud database.');
+                return;
+            }
+
+            // 2. LOGIC REFUND: Jika orderan yang dibatalkan adalah hadiah VVIP (Tukar Poin)
+            if (isReward) {
+                // Cari menu di daftar item diorder untuk tahu berapa poin yang harus dibalikan
+                // Kita cari tau nama menu-nya, potong kata " (Free Poin)" jika ada untuk pelacakan
+                const rewardItem = detailItems[0];
+                if(rewardItem) {
+                    const cleanMenuName = rewardItem.nama.replace(' (Free Poin)', '');
+                    
+                    // Ambil data butuh_poin asli menu tersebut dari tabel menu
+                    const { data: menuData } = await _supabase.from('menu').select('butuh_poin').eq('nama', cleanMenuName).single();
+                    
+                    if (menuData && menuData.butuh_poin > 0) {
+                        const poinRefund = menuData.butuh_poin * rewardItem.qty;
+
+                        // Ambil poin member saat ini untuk ditambahkan poin refund-nya
+                        const { data: memberData } = await _supabase.from('members').select('poin').eq('id', memberId).single();
+                        
+                        if(memberData) {
+                            const poinTerbaru = memberData.poin + poinRefund;
+                            // Kembalikan poin ke akun member
+                            await _supabase.from('members').update({ poin: poinTerbaru }).eq('id', memberId);
+                            alert(`Pesanan Sukses Dibatalkan!\n\n⚠️ Ini adalah transaksi klaim hadiah, sistem otomatis melakukan REFUND pengembalian +${poinRefund} Poin ke akun member!`);
+                        }
+                    }
+                }
+            } else {
+                alert('Pesanan belanja normal berhasil dibatalkan dan dihapus dari antrean kasir!');
+            }
+
+            loadData(); // Reload seluruh view data kasir
         }
 
         async function fetchMembers() {
