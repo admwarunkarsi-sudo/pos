@@ -191,7 +191,7 @@
             alert('Tampilan aplikasi member berhasil diupdate secara online!');
         }
 
-        // BAGIAN YANG DITAMBAHKAN: Fungsi handler untuk otomatis mengunggah file ke Supabase Storage
+        // FUNGSI BARU: Untuk mengunggah berkas foto ke bucket menu-images Anda
         async function uploadImageToSupabase() {
             const fileInput = document.getElementById('new-gambar-file');
             const statusLabel = document.getElementById('upload-status-label');
@@ -201,15 +201,13 @@
             
             const file = fileInput.files[0];
             const fileExt = file.name.split('.').pop();
-            // Membuat nama file acak yang unik agar menghindari bentrok nama file di bucket
             const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-            const filePath = `menu-images/${fileName}`;
+            const filePath = `${fileName}`;
             
             statusLabel.innerText = "Mengunggah...";
             
-            // Asumsi nama bucket Anda: 'menu-assets' (Silakan ubah string 'menu-assets' di bawah jika nama bucket di dasbor Anda berbeda)
             const { data, error } = await _supabase.storage
-                .from('menu-assets')
+                .from('menu-images')
                 .upload(filePath, file, {
                     cacheControl: '3600',
                     upsert: false
@@ -217,15 +215,14 @@
                 
             if (error) {
                 console.error("Upload error:", error);
-                alert("Gagal mengunggah foto! Pastikan kebijakan RLS Storage Anda mengizinkan upload (Anon/Authenticated insert).");
+                alert("Gagal mengunggah foto! Pastikan kebijakan RLS Storage Anda sudah dibuat menggunakan pilihan 'From scratch' dengan expression 'true'.");
                 statusLabel.innerText = "Gagal, Coba Lagi";
                 fileInput.value = ""; 
                 return;
             }
             
-            // Dapatkan Public URL hasil upload untuk disimpan ke database menu
             const { data: publicUrlData } = _supabase.storage
-                .from('menu-assets')
+                .from('menu-images')
                 .getPublicUrl(filePath);
                 
             if (publicUrlData && publicUrlData.publicUrl) {
@@ -234,7 +231,6 @@
             }
         }
 
-        // BAGIAN YANG DIUBAH: Menyesuaikan pembersihan teks status sesudah menu berhasil tersimpan
         async function addNewMenu() {
             const id = document.getElementById('new-id').value.trim();
             const nama = document.getElementById('new-nama').value.trim();
@@ -262,7 +258,6 @@
             document.getElementById('new-id').value = ''; document.getElementById('new-nama').value = '';
             document.getElementById('new-kategori').value = ''; document.getElementById('new-harga').value = '';
             document.getElementById('new-gambar').value = '';
-            // Reset komponen file upload
             document.getElementById('new-gambar-file').value = '';
             document.getElementById('upload-status-label').innerText = 'Pilih & Upload Foto';
             fetchMenuManagement();
