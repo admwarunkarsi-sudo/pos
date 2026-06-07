@@ -83,7 +83,14 @@
                         </select>
                     </div>
                     <div>
-                        <input type="text" id="new-gambar" placeholder="URL Gambar Produk (Link Foto)" class="w-full border rounded-xl px-3 py-2 text-xs focus:outline-emerald-600">
+                        <label class="block text-xs font-bold text-gray-600 mb-1">Foto Produk</label>
+                        <div class="flex items-center gap-2">
+                            <label for="new-gambar-file" class="flex-1 border border-dashed border-emerald-600 rounded-xl px-3 py-2 text-xs bg-emerald-50 text-emerald-700 font-bold text-center cursor-pointer hover:bg-emerald-100 transition flex items-center justify-center gap-1">
+                                <i class="fa-solid fa-cloud-arrow-up"></i> <span id="upload-status-label">Pilih & Upload Foto</span>
+                            </label>
+                            <input type="file" id="new-gambar-file" accept="image/*" onchange="uploadImageToSupabase()" class="hidden">
+                            <input type="hidden" id="new-gambar" value="">
+                        </div>
                     </div>
                     <button onclick="addNewMenu()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 rounded-xl text-xs transition">Tambah ke Database</button>
                 </div>
@@ -184,6 +191,50 @@
             alert('Tampilan aplikasi member berhasil diupdate secara online!');
         }
 
+        // BAGIAN YANG DITAMBAHKAN: Fungsi handler untuk otomatis mengunggah file ke Supabase Storage
+        async function uploadImageToSupabase() {
+            const fileInput = document.getElementById('new-gambar-file');
+            const statusLabel = document.getElementById('upload-status-label');
+            const hiddenUrlInput = document.getElementById('new-gambar');
+            
+            if (!fileInput.files || fileInput.files.length === 0) return;
+            
+            const file = fileInput.files[0];
+            const fileExt = file.name.split('.').pop();
+            // Membuat nama file acak yang unik agar menghindari bentrok nama file di bucket
+            const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+            const filePath = `menu-images/${fileName}`;
+            
+            statusLabel.innerText = "Mengunggah...";
+            
+            // Asumsi nama bucket Anda: 'menu-assets' (Silakan ubah string 'menu-assets' di bawah jika nama bucket di dasbor Anda berbeda)
+            const { data, error } = await _supabase.storage
+                .from('menu-assets')
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+                
+            if (error) {
+                console.error("Upload error:", error);
+                alert("Gagal mengunggah foto! Pastikan kebijakan RLS Storage Anda mengizinkan upload (Anon/Authenticated insert).");
+                statusLabel.innerText = "Gagal, Coba Lagi";
+                fileInput.value = ""; 
+                return;
+            }
+            
+            // Dapatkan Public URL hasil upload untuk disimpan ke database menu
+            const { data: publicUrlData } = _supabase.storage
+                .from('menu-assets')
+                .getPublicUrl(filePath);
+                
+            if (publicUrlData && publicUrlData.publicUrl) {
+                hiddenUrlInput.value = publicUrlData.publicUrl;
+                statusLabel.innerText = "Foto Berhasil Terunggah! ✓";
+            }
+        }
+
+        // BAGIAN YANG DIUBAH: Menyesuaikan pembersihan teks status sesudah menu berhasil tersimpan
         async function addNewMenu() {
             const id = document.getElementById('new-id').value.trim();
             const nama = document.getElementById('new-nama').value.trim();
@@ -211,6 +262,9 @@
             document.getElementById('new-id').value = ''; document.getElementById('new-nama').value = '';
             document.getElementById('new-kategori').value = ''; document.getElementById('new-harga').value = '';
             document.getElementById('new-gambar').value = '';
+            // Reset komponen file upload
+            document.getElementById('new-gambar-file').value = '';
+            document.getElementById('upload-status-label').innerText = 'Pilih & Upload Foto';
             fetchMenuManagement();
         }
 
