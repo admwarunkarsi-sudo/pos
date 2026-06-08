@@ -1605,6 +1605,11 @@
             setCheck('cfg-fitur-order', data.fitur_order !== false);
             setCheck('cfg-fitur-harga', data.fitur_harga !== false);
             renderSlidelist(data.slides || []);
+            // Jika slides kosong tapi banner_slides ada, parse banner_slides sebagai fallback
+            if ((!data.slides || !data.slides.length) && data.banner_slides && data.banner_slides.trim()) {
+                const fallback = data.banner_slides.split(',').map(u => u.trim()).filter(Boolean).map(url => ({ url, caption: '' }));
+                renderSlidelist(fallback);
+            }
         }
     }
 
@@ -1706,8 +1711,12 @@
 
     async function saveSlideshow() {
         const clean = slidesData.filter(s => s.url && s.url.trim());
-        await _supabase.from('toko_settings').update({ slides: clean }).eq('id', 1);
-        alert(`${clean.length} slide berhasil disimpan ke database!`);
+        const { error } = await _supabase.from('toko_settings').update({ slides: clean }).eq('id', 1);
+        if (error) {
+            alert('Gagal menyimpan! Error: ' + (error.message || ''));
+        } else {
+            alert(`${clean.length} slide berhasil disimpan dan tampil di halaman utama!`);
+        }
     }
 
     async function uploadSlideImage(idx, input) {
@@ -1765,12 +1774,12 @@
 
         input.value = '';
 
-        // Auto-save to database
+        // Auto-save ke database
         const clean = slidesData.filter(s => s.url && s.url.trim());
         const { error: saveErr } = await _supabase.from('toko_settings').update({ slides: clean }).eq('id', 1);
         if (!saveErr) {
             setTimeout(() => {
-                if (btn) btn.innerHTML = '<i class="fa-solid fa-check"></i> Tersimpan';
+                if (btn) btn.innerHTML = '<i class="fa-solid fa-check"></i> Tersimpan ✓';
             }, 700);
         }
     }
