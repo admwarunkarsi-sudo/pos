@@ -905,6 +905,59 @@
         }
         .slide-add-btn:hover { border-color: var(--green-600); color: var(--green-600); background: var(--green-50); }
 
+        /* ─── SLIDE UPLOAD ─── */
+        .slide-upload-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            border: 1.5px solid var(--green-600);
+            border-radius: 6px;
+            background: var(--green-50);
+            color: var(--green-700);
+            font-family: var(--font);
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background .15s;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .slide-upload-btn:hover { background: var(--green-100); }
+        .slide-upload-btn.uploading { opacity: .6; cursor: not-allowed; pointer-events: none; }
+        .slide-upload-progress {
+            height: 3px;
+            background: var(--green-100);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 3px;
+        }
+        .slide-upload-progress-bar {
+            height: 100%;
+            background: var(--green-600);
+            border-radius: 2px;
+            transition: width .3s;
+        }
+        .popup-upload-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            padding: 9px 12px;
+            border: 1.5px dashed var(--green-600);
+            border-radius: var(--radius-sm);
+            background: var(--green-50);
+            color: var(--green-700);
+            font-family: var(--font);
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background .15s;
+            margin-top: 8px;
+        }
+        .popup-upload-btn:hover { background: var(--green-100); }
+
         /* ─── POPUP MANAGER ─── */
         .popup-preview {
             position: relative;
@@ -1277,7 +1330,7 @@
             </button>
             <div style="margin-top:12px;" class="info-box">
                 <i class="fa-solid fa-lightbulb"></i>
-                <span>Masukkan URL gambar (disarankan rasio <strong>16:6</strong>, lebar minimal 1200px). Anda bisa upload ke Supabase Storage lalu tempel URL-nya di sini. Urutan slide sesuai urutan baris.</span>
+                <span>Klik <strong>Upload Gambar</strong> di setiap slide untuk langsung mengunggah file dari perangkat Anda (disarankan rasio <strong>16:6</strong>, lebar minimal 1200px). Urutan slide sesuai urutan baris.</span>
             </div>
         </div>
     </div>
@@ -1321,9 +1374,14 @@
                 </div>
 
                 <div>
-                    <label class="form-label">URL Gambar Popup</label>
-                    <input type="text" id="cfg-popup-gambar" class="form-input" placeholder="https://..." oninput="updatePopupPreview()">
-                    <p style="font-size:10px;color:var(--gray-400);margin-top:4px;">Disarankan rasio 4:3 atau 1:1. Maks 800px.</p>
+                    <label class="form-label">Gambar Popup</label>
+                    <input type="text" id="cfg-popup-gambar" class="form-input" placeholder="https://... (atau upload di bawah)" oninput="updatePopupPreview()">
+                    <label for="popup-gambar-file" class="popup-upload-btn">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span id="popup-upload-label">Upload Gambar Langsung</span>
+                    </label>
+                    <input type="file" id="popup-gambar-file" accept="image/*" onchange="uploadPopupImage()" class="hidden">
+                    <p style="font-size:10px;color:var(--gray-400);margin-top:6px;">Disarankan rasio 4:3 atau 1:1. Maks 800px.</p>
                 </div>
 
                 <div>
@@ -1596,14 +1654,27 @@
         const row = document.createElement('div');
         row.className = 'slide-item';
         row.dataset.idx = idx;
+        const thumbContent = data.url
+            ? `<img src="${data.url}" style="width:100%;height:100%;object-fit:cover;border-radius:5px;" onerror="this.style.display='none'">`
+            : '<i class="fa-regular fa-image" style="font-size:14px;color:var(--gray-400);"></i>';
+
         row.innerHTML = `
             <span class="slide-num">${idx + 1}</span>
             <div class="slide-thumb-placeholder" id="slide-thumb-wrap-${idx}">
-                ${data.url ? `<img src="${data.url}" style="width:100%;height:100%;object-fit:cover;border-radius:5px;" onerror="this.style.display='none'">` : '<i class="fa-regular fa-image" style="font-size:14px;color:var(--gray-400);"></i>'}
+                ${thumbContent}
             </div>
             <div class="slide-inputs">
-                <input type="text" class="slide-url-input" placeholder="URL Gambar Slide ${idx+1} (https://...)" value="${data.url || ''}"
-                    oninput="updateSlideData(${idx},'url',this.value)">
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <input type="text" class="slide-url-input" style="flex:1;" placeholder="URL Gambar Slide ${idx+1} (https://...)" value="${data.url || ''}"
+                        oninput="updateSlideData(${idx},'url',this.value)">
+                    <label for="slide-file-${idx}" class="slide-upload-btn" id="slide-upload-btn-${idx}">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Upload
+                    </label>
+                    <input type="file" id="slide-file-${idx}" accept="image/*" style="display:none;" onchange="uploadSlideImage(${idx}, this)">
+                </div>
+                <div class="slide-upload-progress" id="slide-progress-wrap-${idx}" style="display:none;">
+                    <div class="slide-upload-progress-bar" id="slide-progress-bar-${idx}" style="width:0%"></div>
+                </div>
                 <input type="text" class="slide-caption-input" placeholder="Caption / Keterangan (opsional)" value="${data.caption || ''}"
                     oninput="updateSlideData(${idx},'caption',this.value)">
             </div>
@@ -1637,6 +1708,105 @@
         const clean = slidesData.filter(s => s.url && s.url.trim());
         await _supabase.from('toko_settings').update({ slides: clean }).eq('id', 1);
         alert(`${clean.length} slide berhasil disimpan ke database!`);
+    }
+
+    async function uploadSlideImage(idx, input) {
+        if (!input.files || !input.files[0]) return;
+        const file = input.files[0];
+        const btn  = document.getElementById(`slide-upload-btn-${idx}`);
+        const progressWrap = document.getElementById(`slide-progress-wrap-${idx}`);
+        const progressBar  = document.getElementById(`slide-progress-bar-${idx}`);
+
+        if (btn) { btn.classList.add('uploading'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Mengunggah...'; }
+        if (progressWrap) progressWrap.style.display = 'block';
+        if (progressBar)  progressBar.style.width = '30%';
+
+        const fileExt  = file.name.split('.').pop();
+        const fileName = `slide_${Date.now()}_${Math.random().toString(36).substring(2,8)}.${fileExt}`;
+
+        if (progressBar) progressBar.style.width = '60%';
+
+        const { data, error } = await _supabase.storage
+            .from('menu-images')
+            .upload(fileName, file, { cacheControl: '3600', upsert: false });
+
+        if (error) {
+            alert('Gagal mengunggah gambar slide! ' + (error.message || ''));
+            if (btn) { btn.classList.remove('uploading'); btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Upload'; }
+            if (progressWrap) progressWrap.style.display = 'none';
+            input.value = '';
+            return;
+        }
+
+        const { data: urlData } = _supabase.storage.from('menu-images').getPublicUrl(fileName);
+        const publicUrl = urlData?.publicUrl || '';
+
+        if (progressBar) progressBar.style.width = '100%';
+
+        // Update data & UI
+        if (slidesData[idx]) slidesData[idx].url = publicUrl;
+
+        // Update the URL input in the row
+        const row  = document.querySelector(`.slide-item[data-idx="${idx}"]`);
+        if (row) {
+            const urlInput = row.querySelector('.slide-url-input');
+            if (urlInput) urlInput.value = publicUrl;
+        }
+
+        // Update thumb
+        const wrap = document.getElementById(`slide-thumb-wrap-${idx}`);
+        if (wrap) wrap.innerHTML = `<img src="${publicUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:5px;">`;
+
+        setTimeout(() => {
+            if (btn) { btn.classList.remove('uploading'); btn.innerHTML = '<i class="fa-solid fa-check"></i> Terupload'; }
+            if (progressWrap) progressWrap.style.display = 'none';
+            if (progressBar)  progressBar.style.width = '0%';
+        }, 600);
+
+        input.value = '';
+
+        // Auto-save to database
+        const clean = slidesData.filter(s => s.url && s.url.trim());
+        const { error: saveErr } = await _supabase.from('toko_settings').update({ slides: clean }).eq('id', 1);
+        if (!saveErr) {
+            setTimeout(() => {
+                if (btn) btn.innerHTML = '<i class="fa-solid fa-check"></i> Tersimpan';
+            }, 700);
+        }
+    }
+
+    async function uploadPopupImage() {
+        const input = document.getElementById('popup-gambar-file');
+        const label = document.getElementById('popup-upload-label');
+        if (!input.files || !input.files[0]) return;
+
+        const file = input.files[0];
+        if (label) label.textContent = 'Mengunggah...';
+
+        const fileExt  = file.name.split('.').pop();
+        const fileName = `popup_${Date.now()}_${Math.random().toString(36).substring(2,8)}.${fileExt}`;
+
+        const { data, error } = await _supabase.storage
+            .from('menu-images')
+            .upload(fileName, file, { cacheControl: '3600', upsert: false });
+
+        if (error) {
+            alert('Gagal mengunggah gambar popup! ' + (error.message || ''));
+            if (label) label.textContent = 'Upload Gambar Langsung';
+            input.value = '';
+            return;
+        }
+
+        const { data: urlData } = _supabase.storage.from('menu-images').getPublicUrl(fileName);
+        const publicUrl = urlData?.publicUrl || '';
+
+        const urlInput = document.getElementById('cfg-popup-gambar');
+        if (urlInput) urlInput.value = publicUrl;
+        updatePopupPreview();
+
+        if (label) label.textContent = '✓ Gambar Berhasil Diupload';
+        input.value = '';
+        setTimeout(() => { if (label) label.textContent = 'Upload Gambar Langsung'; }, 2500);
     }
 
     async function saveTokoSettings() {
