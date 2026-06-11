@@ -1330,11 +1330,28 @@
         @media print {
             body * { visibility: hidden; }
             #struk-print, #struk-print * { visibility: visible; }
-            #struk-print { position: fixed; top: 0; left: 0; width: 80mm; background: #fff; }
+            #struk-print {
+                position: fixed; top: 0; left: 0;
+                width: 54mm !important;
+                font-size: 12pt !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            /* Force semua teks hitam pekat & bold — sama seperti WARUNK ARSI dan TOTAL */
+            #struk-print, #struk-print * {
+                color: #000 !important;
+                font-weight: 700 !important;
+                background: transparent !important;
+                text-shadow: none !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
         }
+        @page { size: 58mm auto; margin: 2mm; }
         #struk-print {
             font-family: 'Courier New', monospace;
-            font-size: 12px; width: 280px;
+            font-size: 12pt;
+            width: 54mm;
             display: none;
         }
 
@@ -1446,6 +1463,281 @@
             .search-wrap { max-width: 100%; }
         }
     </style>
+
+    <!-- ─── BLUETOOTH THERMAL PRINTER ENGINE (ESC/POS) ─── -->
+    <script>
+    /* ================================================================
+       BluetoothPrinter  —  ESC/POS untuk printer thermal 58/80mm
+       Tested: RPP02N, RPP300, Goojprt, Xprinter BT series
+    ================================================================ */
+    const BTPrinter = (() => {
+        let _device = null, _char = null;
+
+        // UUID standar Nordic UART / Serial Port Profile yang dipakai RPP02N
+        const SERVICE_UUIDS = [
+            '000018f0-0000-1000-8000-00805f9b34fb', // RPP series service
+            '49535343-fe7d-4ae5-8fa9-9fafd205e455', // Microchip UART
+            '6e400001-b5a3-f393-e0a9-e50e24dcca9e', // Nordic UART
+        ];
+        const CHAR_UUIDS = [
+            '00002af1-0000-1000-8000-00805f9b34fb', // RPP write char
+            '49535343-1e4d-4bd9-ba61-23c647249616', // Microchip TX
+            '6e400002-b5a3-f393-e0a9-e50e24dcca9e', // Nordic TX
+        ];
+
+        // ESC/POS helpers
+        const ESC = 0x1B, GS = 0x1D;
+        const cmd = (...bytes) => new Uint8Array(bytes);
+        const INIT        = cmd(ESC, 0x40);
+        const ALIGN_CTR   = cmd(ESC, 0x61, 0x01);
+        const ALIGN_LEFT  = cmd(ESC, 0x61, 0x00);
+        const BOLD_ON     = cmd(ESC, 0x45, 0x01);
+        const BOLD_OFF    = cmd(ESC, 0x45, 0x00);
+        const DBLH_ON     = cmd(ESC, 0x21, 0x10);
+        const DBLH_OFF    = cmd(ESC, 0x21, 0x00);
+        const LF          = cmd(0x0A);
+        const CUT         = cmd(GS,  0x56, 0x42, 0x00); // partial cut
+        const FEED3       = cmd(ESC, 0x64, 0x03);
+
+        function encode(str) {
+            // Printer RPP02N support CP437; ganti karakter IDN yg tidak ada
+            const map = {'Rp':'Rp','–':'-','—':'-','’':"'"};
+            let s = str;
+            for (const [k,v] of Object.entries(map)) s = s.replaceAll(k,v);
+            return new TextEncoder().encode(s);
+        }
+
+        function line(text='') { return concat(encode(text), LF); }
+        function bold(text)    { return concat(BOLD_ON, encode(text), BOLD_OFF); }
+        function center(text)  { return concat(ALIGN_CTR, encode(text), ALIGN_LEFT); }
+        function dashes(n=32)  { return line('-'.repeat(n)); }
+
+        function padLR(left, right, width=32) {
+            const gap = width - left.length - right.length;
+            return left + (gap > 0 ? ' '.repeat(gap) : ' ') + right;
+        }
+
+        function concat(...arrays) {
+            const totalLen = arrays.reduce((s,a) => s + a.length, 0);
+            const out = new Uint8Array(totalLen);
+            let offset = 0;
+            for (const a of arrays) { out.set(a, offset); offset += a.length; }
+            return out;
+        }
+
+        async function findChar(service) {
+            for (const uuid of CHAR_UUIDS) {
+                try { return await service.getCharacteristic(uuid); } catch(_) {}
+            }
+            // fallback: ambil char pertama yang bisa write
+            const chars = await service.getCharacteristics();
+            for (const c of chars) {
+                if (c.properties.write || c.properties.writeWithoutResponse) return c;
+            }
+            throw new Error('Tidak menemukan write characteristic');
+        }
+
+        async function connect() {
+            if (_char && _device && _device.gatt.connected) return true;
+            try {
+                _device = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { name: 'RPP02N' },
+                        { namePrefix: 'RPP' },
+                        { namePrefix: 'Printer' },
+                    ],
+                    optionalServices: SERVICE_UUIDS,
+                    // acceptAllDevices: true  // uncomment jika filter gagal
+                });
+                showBTPairingModal('Menghubungkan ke ' + _device.name + '...');
+                const server  = await _device.gatt.connect();
+                let service = null;
+                for (const uuid of SERVICE_UUIDS) {
+                    try { service = await server.getPrimaryService(uuid); break; } catch(_) {}
+                }
+                if (!service) {
+                    const services = await server.getPrimaryServices();
+                    if (!services.length) throw new Error('Tidak ada service Bluetooth ditemukan');
+                    service = services[0];
+                }
+                _char = await findChar(service);
+                hideBTPairingModal();
+                return true;
+            } catch(e) {
+                hideBTPairingModal();
+                if (e.name !== 'NotFoundError') showBTError('Gagal konek printer: ' + e.message);
+                return false;
+            }
+        }
+
+        async function writeChunk(data) {
+            const CHUNK = 128; // RPP02N max MTU aman
+            for (let i = 0; i < data.length; i += CHUNK) {
+                const chunk = data.slice(i, i + CHUNK);
+                try {
+                    if (_char.properties.writeWithoutResponse)
+                        await _char.writeValueWithoutResponse(chunk);
+                    else
+                        await _char.writeValue(chunk);
+                } catch(e) {
+                    _char = null; _device = null;
+                    throw e;
+                }
+                await new Promise(r => setTimeout(r, 20)); // beri jeda antar chunk
+            }
+        }
+
+        async function printData(data) {
+            if (!(await connect())) return;
+            try {
+                await writeChunk(concat(INIT, data, FEED3, CUT));
+                showBTSuccess();
+            } catch(e) {
+                showBTError('Gagal kirim data: ' + e.message);
+            }
+        }
+
+        // ── Public builder ──────────────────────────────────────────
+        function buildStrukManual(orderId, nama, items, total, metode, diterima, kembalian, catatan) {
+            const now = new Date();
+            const tgl = now.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'});
+            const jam = now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+            const W = 32;
+
+            let data = concat(
+                center(bold('WARUNK ARSI')), LF,
+                center(encode('www.warunkarsi.com')), LF,
+                dashes(W),
+                line('Tanggal : ' + tgl + ' ' + jam),
+                line('ID Order: ' + orderId),
+                line('Kasir   : Walk-In (Langsung)'),
+                line('Bayar   : ' + metode.toUpperCase()),
+                dashes(W)
+            );
+
+            for (const i of items) {
+                const sub = i.harga * i.qty;
+                data = concat(data, line(i.nama.substring(0,22) + ' x' + i.qty));
+                data = concat(data, encode(' '.repeat(4) + padLR('', 'Rp ' + sub.toLocaleString('id-ID'), W-4)), LF);
+            }
+
+            data = concat(data, dashes(W));
+
+            if (catatan) {
+                data = concat(data, line('Catatan: ' + catatan), dashes(W));
+            }
+
+            data = concat(data,
+                encode(padLR('TOTAL', 'Rp ' + total.toLocaleString('id-ID'), W)), LF
+            );
+
+            if (metode === 'tunai') {
+                data = concat(data,
+                    encode(padLR('Diterima', 'Rp ' + diterima.toLocaleString('id-ID'), W)), LF,
+                    encode(padLR('Kembalian', 'Rp ' + Math.max(0,kembalian).toLocaleString('id-ID'), W)), LF
+                );
+            }
+
+            data = concat(data,
+                dashes(W),
+                center(encode('Terima kasih sudah berkunjung!')), LF,
+                center(encode('Warunk Arsi — POS Kasir')), LF
+            );
+            return data;
+        }
+
+        function buildStrukOnline(order) {
+            const isReward = order.total_harga === 0 || order.order_id.startsWith('REWARD');
+            const now = new Date();
+            const tgl = now.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'});
+            const jam = now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+            const W = 32;
+
+            let data = concat(
+                center(bold('WARUNK ARSI')), LF,
+                center(encode('www.warunkarsi.com')), LF,
+                dashes(W),
+                line('Tanggal : ' + tgl + ' ' + jam),
+                line('ID Order: ' + order.order_id),
+                line('Member  : ' + order.member_name),
+                line('Sumber  : Online'),
+                dashes(W)
+            );
+
+            for (const i of order.detail_items) {
+                const sub = (i.harga||0) * i.qty;
+                data = concat(data, line(i.nama.substring(0,22) + ' x' + i.qty));
+                data = concat(data, encode(' '.repeat(4) + padLR('', 'Rp ' + sub.toLocaleString('id-ID'), W-4)), LF);
+            }
+
+            data = concat(data, dashes(W));
+
+            if (order.catatan) {
+                data = concat(data, line('Catatan: ' + order.catatan), dashes(W));
+            }
+
+            const totalStr = isReward ? 'REWARD (Rp 0)' : 'Rp ' + order.total_harga.toLocaleString('id-ID');
+            data = concat(data,
+                encode(padLR('TOTAL', totalStr, W)), LF,
+                dashes(W),
+                center(encode('Terima kasih sudah memesan!')), LF,
+                center(encode('Warunk Arsi — POS Kasir')), LF
+            );
+            return data;
+        }
+
+        return { printManual: (o,n,i,t,m,d,k,c) => printData(buildStrukManual(o,n,i,t,m,d,k,c)),
+                 printOnline: (order)             => printData(buildStrukOnline(order)),
+                 connect };
+    })();
+
+    // ── Toast / UI helpers ─────────────────────────────────────────
+    function showBTPairingModal(msg) {
+        let el = document.getElementById('bt-toast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'bt-toast';
+            el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1E4D3A;color:#fff;padding:10px 20px;border-radius:99px;font-size:12px;font-weight:700;z-index:99999;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,0.25);transition:opacity .3s';
+            document.body.appendChild(el);
+        }
+        el.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite"></span> ' + msg;
+        el.style.opacity = '1';
+        el.style.display = 'flex';
+    }
+    function hideBTPairingModal() {
+        const el = document.getElementById('bt-toast');
+        if (el) el.style.display = 'none';
+    }
+    function showBTSuccess() {
+        let el = document.getElementById('bt-toast');
+        if (!el) return;
+        el.innerHTML = '✅ Struk berhasil dikirim ke printer!';
+        el.style.background = '#16a34a';
+        el.style.display = 'flex';
+        el.style.opacity = '1';
+        setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.style.display='none', 300); }, 2500);
+    }
+    function showBTError(msg) {
+        let el = document.getElementById('bt-toast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'bt-toast';
+            el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:10px 20px;border-radius:99px;font-size:12px;font-weight:700;z-index:99999;display:flex;align-items:center;gap:8px;box-shadow:0 4px 20px rgba(0,0,0,0.25)';
+            document.body.appendChild(el);
+        }
+        el.style.background = '#DC2626';
+        el.style.color = '#fff';
+        el.innerHTML = '❌ ' + msg;
+        el.style.display = 'flex';
+        el.style.opacity = '1';
+        setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.style.display='none', 300); }, 4000);
+    }
+
+    // CSS untuk spinner toast
+    const _btStyle = document.createElement('style');
+    _btStyle.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(_btStyle);
+    </script>
 </head>
 <body>
 
@@ -3404,33 +3696,44 @@
         const now = new Date();
         const tgl = now.toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'numeric'});
         const jam = now.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+
         const itemLines = order.detail_items.map(i => {
-            const sub = (i.harga||0)*i.qty;
-            return `<div style="display:flex;justify-content:space-between;"><span>${i.nama} x${i.qty}</span><span>Rp ${sub.toLocaleString('id-ID')}</span></div>`;
+            const sub = (i.harga||0) * i.qty;
+            return `<div class="row-item">
+                <div>${i.nama} x${i.qty}</div>
+                <div class="row"><span></span><span>Rp ${sub.toLocaleString('id-ID')}</span></div>
+            </div>`;
         }).join('');
-        const struk = document.getElementById('struk-print');
-        struk.innerHTML = `
-            <div style="text-align:center;font-weight:bold;font-size:14px;border-bottom:1px dashed #000;padding-bottom:6px;margin-bottom:6px;">WARUNK ARSI</div>
-            <div style="text-align:center;font-size:10px;">www.warunkarsi.com</div>
-            <div style="border-bottom:1px dashed #000;margin:6px 0;"></div>
-            <div style="font-size:10px;">Tanggal: ${tgl} ${jam}</div>
-            <div style="font-size:10px;">ID: ${order.order_id}</div>
-            <div style="font-size:10px;">Pelanggan: ${order.member_name}</div>
-            <div style="font-size:10px;">Sumber: Online</div>
-            <div style="border-bottom:1px dashed #000;margin:6px 0;"></div>
-            <div style="font-size:11px;">${itemLines}</div>
-            <div style="border-bottom:1px dashed #000;margin:6px 0;"></div>
-            ${order.catatan ? `<div style="font-size:10px;">Catatan: ${order.catatan}</div>` : ''}
-            <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:12px;">
-                <span>TOTAL</span>
-                <span>${isReward ? 'REWARD (Rp 0)' : 'Rp ' + order.total_harga.toLocaleString('id-ID')}</span>
+
+        const totalStr = isReward ? 'REWARD (Rp 0)' : 'Rp ' + order.total_harga.toLocaleString('id-ID');
+        const catatanHtml = order.catatan
+            ? `<div class="small">Catatan: ${order.catatan}</div><div class="dash"></div>` : '';
+
+        const konten = `
+            <div class="center big">WARUNK ARSI</div>
+            <div class="center small">www.warunkarsi.com</div>
+            <div class="dash"></div>
+            <div class="small">Tanggal : ${tgl} ${jam}</div>
+            <div class="small">ID Order: ${order.order_id}</div>
+            <div class="small">Member  : ${order.member_name}</div>
+            <div class="small">Sumber  : Online</div>
+            <div class="dash"></div>
+            ${itemLines}
+            <div class="dash"></div>
+            ${catatanHtml}
+            <div class="row bold">
+                <span>TOTAL</span><span>${totalStr}</span>
             </div>
-            <div style="border-bottom:1px dashed #000;margin:6px 0;"></div>
-            <div style="text-align:center;font-size:10px;">Terima kasih sudah memesan! 🙏</div>
+            <div class="dash"></div>
+            <div class="center small">Terima kasih sudah memesan!</div>
+            <br>
         `;
-        struk.style.display = 'block';
-        window.print();
-        setTimeout(() => { struk.style.display = 'none'; }, 500);
+
+        const popup = window.open('', '_blank', 'width=300,height=600,toolbar=0,menubar=0,scrollbars=0');
+        if (!popup) { alert('Popup diblokir browser. Izinkan popup untuk pos.warunkarsi.com'); return; }
+        popup.document.write(_buatHtmlStruk(konten));
+        popup.document.close();
+        popup.focus();
     }
 
     function loadData() { fetchOrders(); fetchMembers(); fetchMenuManagement(); }
@@ -3677,43 +3980,123 @@
         document.getElementById('uang-diterima').value = '';
     }
 
+    function _buatHtmlStruk(konten) {
+        return `<!DOCTYPE html><html><head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=54mm, initial-scale=1.0">
+        <style>
+            @page { size: 58mm auto; margin: 2mm; }
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            html { width: 54mm; }
+            body {
+                font-family: 'Courier New', monospace;
+                font-size: 12pt;
+                line-height: 1.4;
+                color: #000;
+                width: 54mm;
+                padding: 0;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .center   { text-align: center; }
+            .bold     { font-weight: bold; }
+            .big      { font-size: 14pt; font-weight: bold; }
+            .small    { font-size: 11pt; }
+            .dash     { border-top: 1px dashed #000; margin: 3px 0; }
+            .row      { display: flex; justify-content: space-between; }
+            .row-item { margin-bottom: 2px; font-size: 11pt; }
+            /* tombol print — hanya tampil di layar, hilang saat print */
+            #btn-wrap {
+                display: flex; gap: 6px; margin: 10px 0 4px;
+                width: 54mm;
+            }
+            #btn-cetak, #btn-tutup {
+                flex: 1; padding: 8px 0; font-size: 11pt; font-weight: bold;
+                border: none; border-radius: 6px; cursor: pointer;
+            }
+            #btn-cetak { background: #1E4D3A; color: #fff; }
+            #btn-tutup { background: #e5e7eb; color: #374151; }
+            @media print {
+                #btn-wrap { display: none !important; }
+                /* Force semua teks hitam pekat & bold — sama seperti WARUNK ARSI dan TOTAL */
+                html, body, * {
+                    color: #000 !important;
+                    font-weight: 700 !important;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                    background: transparent !important;
+                    text-shadow: none !important;
+                }
+                body { background: #fff !important; }
+                .dash { border-top-color: #000 !important; border-top-width: 1.5px !important; }
+            }
+        </style></head>
+        <body>
+            ${konten}
+            <div id="btn-wrap">
+                <button id="btn-cetak" onclick="window.print()">🖨 Cetak</button>
+                <button id="btn-tutup" onclick="window.close()">✕ Tutup</button>
+            </div>
+            <script>
+                // Auto-print saat popup terbuka
+                window.onload = function() {
+                    // Beri waktu render dulu
+                    setTimeout(function() { window.print(); }, 250);
+                };
+                // Tutup popup otomatis setelah print selesai / dibatalkan
+                window.onafterprint = function() {
+                    setTimeout(function() { window.close(); }, 200);
+                };
+            <\/script>
+        </body></html>`;
+    }
+
     function cetakStrukManual(orderId, nama, items, total, metode, diterima, kembalian, catatan) {
         const now = new Date();
         const tgl = now.toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'numeric'});
         const jam = now.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+
         const itemLines = items.map(i => {
             const sub = i.harga * i.qty;
-            return `<div style="display:flex;justify-content:space-between;"><span>${i.nama} x${i.qty}</span><span>Rp ${sub.toLocaleString('id-ID')}</span></div>`;
+            return `<div class="row-item">
+                <div>${i.nama} x${i.qty}</div>
+                <div class="row"><span></span><span>Rp ${sub.toLocaleString('id-ID')}</span></div>
+            </div>`;
         }).join('');
-        const struk = document.getElementById('struk-print');
-        struk.innerHTML = `
-            <div style="text-align:center;font-weight:bold;font-size:14px;border-bottom:1px dashed #000;padding-bottom:6px;margin-bottom:6px;">WARUNK ARSI</div>
-            <div style="text-align:center;font-size:10px;">www.warunkarsi.com</div>
-            <div style="border-bottom:1px dashed #000;margin:6px 0;"></div>
-            <div style="font-size:10px;">Tanggal : ${tgl} ${jam}</div>
-            <div style="font-size:10px;">ID Order: ${orderId}</div>
-            <div style="font-size:10px;">Kasir   : ${nama} (Langsung)</div>
-            <div style="font-size:10px;">Bayar   : ${metode.toUpperCase()}</div>
-            <div style="border-bottom:1px dashed #000;margin:6px 0;"></div>
+
+        const tunaiHtml = metode === 'tunai' ? `
+            <div class="row"><span>Diterima</span><span>Rp ${diterima.toLocaleString('id-ID')}</span></div>
+            <div class="row"><span>Kembalian</span><span>Rp ${Math.max(0,kembalian).toLocaleString('id-ID')}</span></div>` : '';
+
+        const catatanHtml = catatan
+            ? `<div class="small">Catatan: ${catatan}</div><div class="dash"></div>` : '';
+
+        const konten = `
+            <div class="center big">WARUNK ARSI</div>
+            <div class="center small">www.warunkarsi.com</div>
+            <div class="dash"></div>
+            <div class="small">Tanggal : ${tgl} ${jam}</div>
+            <div class="small">ID Order: ${orderId}</div>
+            <div class="small">Kasir   : Walk-In (Langsung)</div>
+            <div class="small">Bayar   : ${metode.toUpperCase()}</div>
+            <div class="dash"></div>
             ${itemLines}
-            <div style="border-bottom:1px dashed #000;margin:6px 0;"></div>
-            ${catatan ? `<div style="font-size:10px;">Catatan: ${catatan}</div><div style="border-bottom:1px dashed #000;margin:6px 0;"></div>` : ''}
-            <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:12px;">
+            <div class="dash"></div>
+            ${catatanHtml}
+            <div class="row bold">
                 <span>TOTAL</span><span>Rp ${total.toLocaleString('id-ID')}</span>
             </div>
-            ${metode==='tunai' ? `
-            <div style="display:flex;justify-content:space-between;font-size:11px;">
-                <span>Diterima</span><span>Rp ${diterima.toLocaleString('id-ID')}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:11px;">
-                <span>Kembalian</span><span>Rp ${Math.max(0,kembalian).toLocaleString('id-ID')}</span>
-            </div>` : ''}
-            <div style="border-bottom:1px dashed #000;margin:6px 0;"></div>
-            <div style="text-align:center;font-size:10px;">Terima kasih sudah berkunjung! 🙏</div>
+            ${tunaiHtml}
+            <div class="dash"></div>
+            <div class="center small">Terima kasih sudah berkunjung!</div>
+            <br>
         `;
-        struk.style.display = 'block';
-        window.print();
-        setTimeout(() => { struk.style.display = 'none'; }, 500);
+
+        const popup = window.open('', '_blank', 'width=300,height=600,toolbar=0,menubar=0,scrollbars=0');
+        if (!popup) { alert('Popup diblokir browser. Izinkan popup untuk pos.warunkarsi.com'); return; }
+        popup.document.write(_buatHtmlStruk(konten));
+        popup.document.close();
+        popup.focus();
     }
 
     // ══════════════════════════════════════════════
