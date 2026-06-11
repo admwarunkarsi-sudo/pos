@@ -1109,6 +1109,12 @@
             padding: 0;
         }
 
+        /* ─── PULSE CARD ANIMATION (pesanan baru belum dibuka) ─── */
+        @keyframes pulseCard {
+            0%, 100% { border-left-color: var(--red-600); box-shadow: 0 0 0 0 rgba(220,38,38,0); }
+            50% { border-left-color: #ef4444; box-shadow: 0 0 0 4px rgba(220,38,38,0.15); }
+        }
+
         /* ─── HIDDEN ─── */
         .hidden { display: none !important; }
 
@@ -1489,7 +1495,12 @@
                 <i class="fa-solid fa-display"></i> Tampilan Web
             </button>
         </div>
+        <button onclick="bukaMenuAkunAdmin()" id="btn-akun-admin" class="tab-btn inactive" style="position:relative;flex-shrink:0;">
+            <i class="fa-solid fa-user-shield"></i> Akun
+            <span id="badge-chat" class="tab-badge hidden-badge" style="position:absolute;top:-4px;right:-4px;">0</span>
+        </button>
     </div>
+
 
     <!-- ─── PANEL ANTREAN ─── -->
     <div id="panel-antrean" class="panel-grid">
@@ -2098,6 +2109,107 @@
 
 </div>
 </div>
+
+<!-- ─── PANEL CHAT ─── -->
+<div id="panel-chat" class="hidden" style="padding:0 0 16px;">
+<div style="max-width:1200px;margin:0 auto;display:grid;grid-template-columns:300px 1fr;gap:16px;height:calc(100vh - 140px);min-height:500px;">
+
+    <!-- Left: Daftar Percakapan -->
+    <div class="card" style="display:flex;flex-direction:column;overflow:hidden;min-height:0;">
+        <div class="card-header">
+            <span class="card-title"><i class="fa-solid fa-comments"></i> Percakapan</span>
+            <span id="chat-unread-total" style="display:none;background:var(--red-600);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;font-family:var(--font-mono);">0</span>
+        </div>
+        <div style="padding:10px 14px;border-bottom:1px solid var(--gray-100);flex-shrink:0;">
+            <input type="text" id="chat-search-member" oninput="filterChatList(this.value)" placeholder="Cari nama member..." style="width:100%;font-family:var(--font);font-size:12px;border:1.5px solid var(--gray-200);border-radius:8px;padding:7px 10px;outline:none;color:var(--gray-800);background:#fff;" onfocus="this.style.borderColor='var(--green-600)'" onblur="this.style.borderColor='var(--gray-200)'">
+        </div>
+        <div id="chat-list-members" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;">
+            <div style="text-align:center;padding:24px;color:var(--gray-400);font-size:12px;">
+                <i class="fa-solid fa-inbox" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+                Belum ada percakapan masuk
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Area Chat -->
+    <div class="card" id="chat-area-admin" style="display:flex;flex-direction:column;overflow:hidden;min-height:0;">
+        <!-- Placeholder saat belum pilih -->
+        <div id="chat-placeholder-admin" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--gray-400);text-align:center;padding:24px;">
+            <i class="fa-solid fa-comment-dots" style="font-size:40px;color:var(--gray-200);"></i>
+            <p style="font-size:13px;font-weight:600;">Pilih percakapan di kiri</p>
+            <p style="font-size:11px;">untuk mulai membalas pesan customer</p>
+        </div>
+
+        <!-- Chat aktif -->
+        <div id="chat-active-area" style="display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0;">
+            <!-- Chat Header -->
+            <div id="chat-active-header" style="padding:12px 16px;border-bottom:1px solid var(--gray-100);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--gray-50);">
+                <div id="chat-active-avatar" style="width:36px;height:36px;border-radius:50%;background:var(--green-100);color:var(--green-700);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0;"></div>
+                <div style="flex:1;min-width:0;">
+                    <div id="chat-active-name" style="font-weight:800;font-size:13px;color:var(--gray-800);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+                    <div id="chat-active-wa" style="font-size:10px;color:var(--gray-400);"></div>
+                </div>
+                <a id="chat-wa-link" href="#" target="_blank" style="background:#16a34a;color:#fff;font-size:10px;font-weight:700;padding:5px 12px;border-radius:6px;text-decoration:none;display:flex;align-items:center;gap:4px;flex-shrink:0;">
+                    <i class="fa-brands fa-whatsapp"></i> WA
+                </a>
+            </div>
+            <!-- Messages area -->
+            <div id="chat-admin-messages" style="flex:1;min-height:0;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:#f9fafb;">
+            </div>
+            <!-- Input area -->
+            <div style="padding:10px 14px 14px;border-top:1.5px solid var(--gray-200);display:flex;gap:8px;align-items:flex-end;flex-shrink:0;background:#fff;">
+                <textarea id="chat-admin-input" rows="2" placeholder="Ketik balasan... (Enter untuk kirim, Shift+Enter baris baru)"
+                    style="flex:1;font-family:var(--font);font-size:13px;border:1.5px solid var(--gray-200);border-radius:10px;padding:9px 12px;outline:none;resize:none;max-height:100px;line-height:1.5;color:var(--gray-800);background:#fff;transition:border-color .15s;"
+                    onfocus="this.style.borderColor='var(--green-600)'"
+                    onblur="this.style.borderColor='var(--gray-200)'"
+                    oninput="autoResizeAdminChat(this)"
+                    onkeydown="handleAdminChatEnter(event)"></textarea>
+                <button onclick="kirimPesanAdmin()"
+                    style="background:var(--green-600);color:#fff;border:none;border-radius:10px;padding:0 18px;height:42px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;flex-shrink:0;transition:background .15s;"
+                    onmouseover="this.style.background='var(--green-700)'"
+                    onmouseout="this.style.background='var(--green-600)'">
+                    <i class="fa-solid fa-paper-plane"></i> Kirim
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+</div>
+
+<!-- ─── MODAL AKUN ADMIN ─── -->
+<div id="modal-akun-admin" class="modal-overlay" style="align-items:flex-end;padding:0;">
+    <div style="background:#fff;border-radius:24px 24px 0 0;width:100%;max-width:480px;margin:0 auto;box-shadow:0 -12px 40px rgba(0,0,0,0.15);overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#0f4c2a,#15803d);padding:20px 20px 16px;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;">Panel Admin</div>
+                <div style="font-size:16px;font-weight:800;color:#fff;"><i class="fa-solid fa-user-shield" style="font-size:13px;margin-right:6px;color:var(--amber-400);"></i>Warunk Arsi Admin</div>
+            </div>
+            <button onclick="tutupMenuAkunAdmin()" style="background:rgba(255,255,255,0.15);border:none;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;cursor:pointer;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        <div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
+            <!-- Live Chat Button -->
+            <button onclick="bukaAdminChatDariAkun()" style="width:100%;display:flex;align-items:center;gap:12px;background:var(--green-50);border:1.5px solid var(--green-200);border-radius:12px;padding:14px 16px;cursor:pointer;transition:background .15s;text-align:left;position:relative;" onmouseover="this.style.background='var(--green-100)'" onmouseout="this.style.background='var(--green-50)'">
+                <div style="width:40px;height:40px;border-radius:10px;background:var(--green-600);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class="fa-solid fa-comments" style="color:#fff;font-size:16px;"></i>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;font-weight:800;color:var(--gray-800);">Live Chat</div>
+                    <div style="font-size:11px;color:var(--gray-500);margin-top:1px;">Balas pesan dari pelanggan</div>
+                </div>
+                <span id="badge-chat-akun" style="display:none;background:var(--red-600);color:#fff;font-size:9px;font-weight:800;min-width:20px;height:20px;border-radius:10px;display:none;align-items:center;justify-content:center;font-family:var(--font-mono);padding:0 5px;flex-shrink:0;"></span>
+                <i class="fa-solid fa-chevron-right" style="color:var(--gray-400);font-size:11px;flex-shrink:0;"></i>
+            </button>
+            <!-- Info Version -->
+            <div style="text-align:center;padding:8px 0 4px;font-size:10px;color:var(--gray-400);">
+                Warunk Arsi POS &nbsp;•&nbsp; Admin Panel v2.0
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="modal-detail-pesanan" class="modal-overlay">
     <div class="modal-box">
         <div id="modal-header-bg" class="modal-header green">
@@ -2249,7 +2361,13 @@
     let selectedPayment = 'tunai';
     let currentLaporanFilter = 'hari';
     let currentModalOrder = null;
-    let lastOrderCount = 0;
+    let lastOrderCount = -1; // -1 = belum pernah load, cegah alert saat pertama kali load
+
+    // ─── TRACKING PESANAN BELUM DIBUKA ───
+    // Set berisi order_id yang sudah masuk tapi BELUM dibuka admin
+    let unopenedOrderIds = new Set();
+    // Interval yang membunyikan notif berulang selama ada pesanan belum dibuka
+    let orderAlertInterval = null;
 
     // ─── JAM OPERASIONAL (06:00 – 13:00) ───
     // Di luar jam ini: stok = unlimited (Pre-Order). Menu yang di-set Habis tetap Habis.
@@ -2280,10 +2398,82 @@
         setTimeout(() => t.classList.remove('show'), 3000);
     }
 
+    // ─── MANAJEMEN ALERT PESANAN BELUM DIBUKA ───
+    // Mulai bunyikan notif berulang jika ada pesanan yang belum dibuka
+    function startOrderAlert() {
+        if (orderAlertInterval) return; // sudah berjalan
+        // Langsung bunyi sekali dulu
+        playNotifSound();
+        // Kemudian ulangi setiap 5 detik
+        orderAlertInterval = setInterval(() => {
+            if (unopenedOrderIds.size === 0) {
+                stopOrderAlert();
+                return;
+            }
+            playNotifSound();
+        }, 5000);
+    }
+
+    // Hentikan bunyi berulang
+    function stopOrderAlert() {
+        if (orderAlertInterval) {
+            clearInterval(orderAlertInterval);
+            orderAlertInterval = null;
+        }
+    }
+
+    // Dipanggil setiap fetchOrders selesai — sinkronkan set unopened dengan antrean aktif
+    function syncUnopenedOrders(orders) {
+        if (!orders || orders.length === 0) {
+            unopenedOrderIds.clear();
+            stopOrderAlert();
+            return;
+        }
+        // Hapus order dari set jika sudah tidak ada di antrean (selesai/batal)
+        const activeIds = new Set(orders.map(o => o.order_id));
+        for (const id of unopenedOrderIds) {
+            if (!activeIds.has(id)) unopenedOrderIds.delete(id);
+        }
+        // Cek apakah masih ada yang belum dibuka
+        if (unopenedOrderIds.size > 0) {
+            startOrderAlert();
+        } else {
+            stopOrderAlert();
+        }
+    }
+
     // ─── OFFLINE DETECTION ───
     window.addEventListener('online', () => document.getElementById('offline-bar').classList.remove('show'));
     window.addEventListener('offline', () => document.getElementById('offline-bar').classList.add('show'));
     if (!navigator.onLine) document.getElementById('offline-bar').classList.add('show');
+
+    // ─── MENU AKUN ADMIN ───
+    function bukaMenuAkunAdmin() {
+        const overlay = document.getElementById('modal-akun-admin');
+        if (overlay) overlay.classList.add('open');
+    }
+
+    function tutupMenuAkunAdmin() {
+        const overlay = document.getElementById('modal-akun-admin');
+        if (overlay) overlay.classList.remove('open');
+    }
+
+    function bukaAdminChatDariAkun() {
+        tutupMenuAkunAdmin();
+        // Sembunyikan semua panel utama
+        ['antrean','kasir','laporan','manajemen','tampilan'].forEach(t => {
+            const panel = document.getElementById(`panel-${t}`);
+            const btn   = document.getElementById(`tab-${t}`);
+            if (panel) panel.classList.add('hidden');
+            if (btn) btn.className = 'tab-btn inactive';
+        });
+        const panelChat = document.getElementById('panel-chat');
+        if (panelChat) panelChat.classList.remove('hidden');
+        initAdminChat();
+        // Reset badge
+        adminTotalUnread = 0;
+        updateAdminChatBadge();
+    }
 
     function switchTab(tab) {
         ['antrean','kasir','laporan','manajemen','tampilan'].forEach(t => {
@@ -2293,6 +2483,11 @@
             panel.classList.toggle('hidden', t !== tab);
             btn.className = t === tab ? 'tab-btn active' : 'tab-btn inactive';
         });
+        // Sembunyikan panel chat jika bukan dari menu Akun
+        if (tab !== 'chat') {
+            const panelChat = document.getElementById('panel-chat');
+            if (panelChat) panelChat.classList.add('hidden');
+        }
         if (tab === 'tampilan') loadTokoSettings();
         if (tab === 'kasir') renderKasirMenu();
         if (tab === 'laporan') fetchLaporan();
@@ -2997,12 +3192,29 @@
                 badge.classList.add('hidden-badge');
             }
         }
-        // Play sound if new order arrived
-        if (count > lastOrderCount && lastOrderCount !== -1) {
-            playNotifSound();
-            if (count > lastOrderCount) showToast(`🔔 ${count - lastOrderCount} pesanan baru masuk!`, 'amber');
+
+        // ─── DETEKSI PESANAN BARU ───
+        if (orders && orders.length > 0 && lastOrderCount >= 0) {
+            // Bandingkan dengan cache lama — order yang belum ada di cache = baru
+            orders.forEach(order => {
+                const sudahAda = currentOrdersCache.some(o => o.order_id === order.order_id);
+                if (!sudahAda) {
+                    unopenedOrderIds.add(order.order_id);
+                }
+            });
+            const jumlahBaru = [...orders].filter(o =>
+                !currentOrdersCache.some(c => c.order_id === o.order_id)
+            ).length;
+            if (jumlahBaru > 0) {
+                showToast(`🔔 ${jumlahBaru} pesanan baru masuk!`, 'amber');
+                startOrderAlert();
+            }
         }
+
         lastOrderCount = count;
+
+        // Sinkronkan set pesanan belum dibuka dengan antrean aktif
+        syncUnopenedOrders(orders);
 
         if (!orders || orders.length === 0) {
             currentOrdersCache = [];
@@ -3017,12 +3229,15 @@
         currentOrdersCache = orders;
         container.innerHTML = orders.map(order => {
             const isReward = order.total_harga === 0 || order.order_id.startsWith('REWARD');
+            // Tandai card pesanan yang belum dibuka dengan visual pulse
+            const isUnopened = unopenedOrderIds.has(order.order_id);
             return `
-                <div onclick="openOrderModal('${order.order_id}')" class="order-card${isReward ? ' reward' : ''}">
+                <div onclick="openOrderModal('${order.order_id}')" class="order-card${isReward ? ' reward' : ''}" style="${isUnopened ? 'border-left-color:var(--red-600);animation:pulseCard 1.5s infinite;' : ''}">
                     <div>
                         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
                             <span class="order-id-badge${isReward ? ' reward' : ''}">${order.order_id}</span>
                             <span class="order-name">${order.member_name}</span>
+                            ${isUnopened ? `<span style="background:var(--red-600);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;animation:pulse-anim 1s infinite;">BARU</span>` : ''}
                         </div>
                         <div class="order-note">Catatan: ${order.catatan || '—'}</div>
                     </div>
@@ -3052,6 +3267,13 @@
         const order = currentOrdersCache.find(o => o.order_id === orderIdText);
         if (!order) return;
         currentModalOrder = order;
+
+        // ─── Tandai pesanan ini sudah dibuka ───
+        unopenedOrderIds.delete(orderIdText);
+        // Jika tidak ada lagi pesanan belum dibuka, hentikan bunyi
+        if (unopenedOrderIds.size === 0) stopOrderAlert();
+        // Refresh tampilan card agar badge BARU hilang
+        fetchOrders();
 
         const isReward = order.total_harga === 0 || order.order_id.startsWith('REWARD');
 
@@ -3609,6 +3831,415 @@
         a.href = URL.createObjectURL(blob);
         a.download = `laporan-warunk-arsi-${new Date().toISOString().slice(0,10)}.csv`;
         a.click();
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // CHAT SYSTEM — ADMIN SIDE
+    // ══════════════════════════════════════════════════════════
+
+    let adminChatSubscription = null;
+    let adminChatOrderSubscription = null;
+    let activeChatMemberId = null;
+    let adminChatConversations = {}; // keyed by member_id
+    let adminTotalUnread = 0;
+
+    // ── Audio ──
+    function playAdminChatSound() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1046, ctx.currentTime);
+            osc.frequency.setValueAtTime(784, ctx.currentTime + 0.12);
+            gain.gain.setValueAtTime(0.35, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.45);
+        } catch(e) {}
+    }
+
+    function playAdminOrderSound() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            [0, 0.18, 0.36, 0.54].forEach((t, i) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.type = 'square';
+                osc.frequency.setValueAtTime([523,659,784,1046][i], ctx.currentTime + t);
+                gain.gain.setValueAtTime(0.25, ctx.currentTime + t);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.25);
+                osc.start(ctx.currentTime + t);
+                osc.stop(ctx.currentTime + t + 0.25);
+            });
+        } catch(e) {}
+    }
+
+    function showAdminToast(text, type = 'green') {
+        showToast(text, type);
+    }
+
+    function updateAdminChatBadge() {
+        const badge = document.getElementById('badge-chat');
+        const badgeAkun = document.getElementById('badge-chat-akun');
+        const totalEl = document.getElementById('chat-unread-total');
+        if (!badge) return;
+        if (adminTotalUnread > 0) {
+            const txt = adminTotalUnread > 99 ? '99+' : adminTotalUnread;
+            badge.textContent = txt;
+            badge.classList.remove('hidden-badge');
+            if (badgeAkun) { badgeAkun.textContent = txt; badgeAkun.style.display = 'flex'; }
+            if (totalEl) { totalEl.textContent = adminTotalUnread; totalEl.style.display = 'inline'; }
+        } else {
+            badge.classList.add('hidden-badge');
+            if (badgeAkun) badgeAkun.style.display = 'none';
+            if (totalEl) totalEl.style.display = 'none';
+        }
+    }
+
+    async function initAdminChat() {
+        // Load semua pesan unik per member
+        const { data, error } = await _supabase
+            .from('chat_messages')
+            .select('*')
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.error('Chat load error:', error);
+            return;
+        }
+
+        adminChatConversations = {};
+        (data || []).forEach(msg => {
+            const mid = msg.member_id;
+            if (!mid) return;
+            if (!adminChatConversations[mid]) {
+                adminChatConversations[mid] = {
+                    member_id: mid,
+                    sender_name: msg.sender_role === 'user' ? msg.sender_name : null,
+                    messages: [],
+                    unread: 0,
+                    last_time: msg.created_at
+                };
+            }
+            adminChatConversations[mid].messages.push(msg);
+            adminChatConversations[mid].last_time = msg.created_at;
+            if (msg.sender_role === 'user' && !msg.sender_name && msg.sender_name) {
+                adminChatConversations[mid].sender_name = msg.sender_name;
+            } else if (msg.sender_role === 'user' && msg.sender_name) {
+                adminChatConversations[mid].sender_name = msg.sender_name;
+            }
+            // Hitung unread: pesan dari user yang belum dibaca admin
+            // Jika sedang aktif membuka conversation ini, anggap sudah terbaca
+            if (msg.sender_role === 'user' && !msg.is_read_admin && mid !== activeChatMemberId) {
+                adminChatConversations[mid].unread++;
+            }
+        });
+
+        // Jika ada conversation yang sedang aktif, pastikan unread-nya 0
+        if (activeChatMemberId && adminChatConversations[activeChatMemberId]) {
+            adminChatConversations[activeChatMemberId].unread = 0;
+        }
+
+        renderAdminChatList();
+
+        // Hitung total unread dari semua conversation
+        adminTotalUnread = Object.values(adminChatConversations).reduce((s, c) => s + c.unread, 0);
+        updateAdminChatBadge();
+
+        // Re-render pesan aktif jika ada
+        if (activeChatMemberId && adminChatConversations[activeChatMemberId]) {
+            renderAdminMessages(adminChatConversations[activeChatMemberId].messages);
+        }
+
+        // Subscribe realtime semua chat baru
+        if (adminChatSubscription) _supabase.removeChannel(adminChatSubscription);
+        adminChatSubscription = _supabase.channel('admin-chat-all')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'chat_messages'
+            }, (payload) => {
+                const msg = payload.new;
+                const mid = msg.member_id;
+                if (!mid) return;
+
+                if (!adminChatConversations[mid]) {
+                    adminChatConversations[mid] = { member_id: mid, sender_name: msg.sender_name, messages: [], unread: 0, last_time: msg.created_at };
+                }
+                adminChatConversations[mid].messages.push(msg);
+                adminChatConversations[mid].last_time = msg.created_at;
+                if (msg.sender_role === 'user' && msg.sender_name) {
+                    adminChatConversations[mid].sender_name = msg.sender_name;
+                }
+
+                if (msg.sender_role === 'user') {
+                    if (mid !== activeChatMemberId) {
+                        adminChatConversations[mid].unread++;
+                        adminTotalUnread++;
+                        updateAdminChatBadge();
+                        playAdminChatSound();
+                        showToast('💬 Pesan baru dari ' + (msg.sender_name || mid), 'amber');
+                    } else {
+                        // Mark as read langsung
+                        _supabase.from('chat_messages').update({ is_read_admin: true }).eq('id', msg.id);
+                    }
+                    renderAdminChatList();
+                }
+
+                if (mid === activeChatMemberId) {
+                    renderAdminMessages(adminChatConversations[mid].messages);
+                }
+            })
+            .subscribe();
+    }
+
+    function renderAdminChatList(filter = '') {
+        const container = document.getElementById('chat-list-members');
+        if (!container) return;
+
+        const convos = Object.values(adminChatConversations)
+            .sort((a, b) => new Date(b.last_time) - new Date(a.last_time));
+
+        if (!convos.length) {
+            container.innerHTML = `<div style="text-align:center;padding:24px;color:var(--gray-400);font-size:12px;">
+                <i class="fa-solid fa-inbox" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+                Belum ada percakapan masuk
+            </div>`;
+            return;
+        }
+
+        const filtered = filter ? convos.filter(c => 
+            (c.sender_name || c.member_id || '').toLowerCase().includes(filter.toLowerCase())
+        ) : convos;
+
+        container.innerHTML = filtered.map(c => {
+            const lastMsg = c.messages[c.messages.length - 1];
+            const timeStr = lastMsg ? new Date(lastMsg.created_at).toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'}) : '';
+            const preview = lastMsg ? (lastMsg.sender_role === 'admin' ? '→ ' + lastMsg.message : lastMsg.message) : '';
+            const nama = c.sender_name || c.member_id || 'User';
+            const inisial = nama.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+            const isActive = c.member_id === activeChatMemberId;
+            const hasUnread = c.unread > 0;
+            // Status terbaca: jika pesan terakhir dari user dan sudah dibaca (unread=0), tampilkan centang
+            const lastIsUser = lastMsg && lastMsg.sender_role === 'user';
+            const readStatusHtml = !hasUnread && lastIsUser
+                ? `<span title="Terbaca" style="font-size:10px;color:var(--green-600);flex-shrink:0;margin-left:2px;"><i class="fa-solid fa-check-double"></i></span>`
+                : '';
+
+            return `<div onclick="pilihChatMember('${c.member_id}')" style="
+                padding:12px 14px; cursor:pointer; border-bottom:1px solid var(--gray-100);
+                background:${isActive ? 'var(--green-50)' : '#fff'};
+                border-left:3px solid ${isActive ? 'var(--green-600)' : 'transparent'};
+                transition:background .15s;
+                display:flex;align-items:center;gap:10px;
+            " onmouseover="this.style.background='var(--green-50)'" onmouseout="this.style.background='${isActive ? 'var(--green-50)' : '#fff'}'">
+                <div style="width:38px;height:38px;border-radius:50%;background:var(--green-100);color:var(--green-700);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0;">${inisial}</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+                        <span style="font-weight:${hasUnread?'800':'700'};font-size:12px;color:var(--gray-800);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;">${escapeAdminHtml(nama)}</span>
+                        <span style="font-size:9px;color:var(--gray-400);flex-shrink:0;">${timeStr}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-size:11px;color:${hasUnread?'var(--gray-600)':'var(--gray-400)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;">${escapeAdminHtml(preview.slice(0, 40))}</span>
+                        ${hasUnread
+                            ? `<span style="background:var(--red-600);color:#fff;font-size:9px;font-weight:800;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);flex-shrink:0;">${c.unread}</span>`
+                            : readStatusHtml
+                        }
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    async function pilihChatMember(memberId) {
+        activeChatMemberId = memberId;
+        const convo = adminChatConversations[memberId];
+        if (!convo) return;
+
+        // Reset unread count untuk member ini secara lokal
+        const prev = convo.unread;
+        convo.unread = 0;
+
+        // Tandai semua pesan dari user sebagai terbaca di memori lokal juga
+        convo.messages.forEach(msg => {
+            if (msg.sender_role === 'user') msg.is_read_admin = true;
+        });
+
+        // Recalculate total unread dari semua conversation
+        adminTotalUnread = Object.values(adminChatConversations).reduce((s, c) => s + c.unread, 0);
+        updateAdminChatBadge();
+        renderAdminChatList();
+
+        // Mark as read di database — update semua pesan user yang belum dibaca
+        _supabase.from('chat_messages')
+            .update({ is_read_admin: true })
+            .eq('member_id', memberId)
+            .eq('sender_role', 'user')
+            .eq('is_read_admin', false)
+            .then(() => {});
+
+        // Show chat area
+        document.getElementById('chat-placeholder-admin').style.display = 'none';
+        const activeArea = document.getElementById('chat-active-area');
+        activeArea.style.display = 'flex';
+        activeArea.style.flexDirection = 'column';
+        activeArea.style.flex = '1';
+        activeArea.style.overflow = 'hidden';
+        activeArea.style.minHeight = '0';
+
+        // Set header info
+        const nama = convo.sender_name || memberId;
+        const inisial = nama.trim().split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+        document.getElementById('chat-active-avatar').textContent = inisial;
+        document.getElementById('chat-active-name').textContent = nama;
+        document.getElementById('chat-active-wa').textContent = memberId;
+        const waLink = document.getElementById('chat-wa-link');
+        if (waLink) waLink.href = 'https://wa.me/' + memberId.replace(/\D/g,'');
+
+        renderAdminMessages(convo.messages);
+    }
+
+    function renderAdminMessages(messages) {
+        const container = document.getElementById('chat-admin-messages');
+        if (!container) return;
+
+        if (!messages || !messages.length) {
+            container.innerHTML = `<div style="text-align:center;padding:24px;color:var(--gray-400);font-size:12px;">Belum ada pesan.</div>`;
+            return;
+        }
+
+        let html = '';
+        let lastDate = '';
+        messages.forEach(msg => {
+            const d = new Date(msg.created_at);
+            const dateStr = d.toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' });
+            const timeStr = d.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+            const isAdmin = msg.sender_role === 'admin';
+
+            if (dateStr !== lastDate) {
+                html += `<div style="text-align:center;font-size:10px;font-weight:700;color:var(--gray-400);padding:4px 0;display:flex;align-items:center;gap:8px;">
+                    <span style="flex:1;height:1px;background:var(--gray-200);"></span>${dateStr}<span style="flex:1;height:1px;background:var(--gray-200);"></span></div>`;
+                lastDate = dateStr;
+            }
+
+            html += `<div style="display:flex;align-items:flex-end;gap:7px;${isAdmin ? 'flex-direction:row-reverse;' : ''}">
+                <div style="max-width:75%;min-width:52px;padding:9px 13px;border-radius:16px;font-size:12px;font-weight:500;line-height:1.55;word-break:break-word;word-wrap:break-word;white-space:pre-wrap;
+                    ${isAdmin 
+                        ? 'background:var(--green-600);color:#fff;border-bottom-right-radius:4px;' 
+                        : 'background:#fff;color:var(--gray-800);border:1.5px solid var(--gray-200);border-bottom-left-radius:4px;'
+                    }">
+                    ${escapeAdminHtml(msg.message)}
+                </div>
+                <span style="font-size:9px;color:var(--gray-400);white-space:nowrap;padding-bottom:4px;">${timeStr}</span>
+            </div>`;
+        });
+
+        container.innerHTML = html;
+        setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+    }
+
+    async function kirimPesanAdmin() {
+        if (!activeChatMemberId) return;
+        const input = document.getElementById('chat-admin-input');
+        const msg = input.value.trim();
+        if (!msg) return;
+
+        input.value = '';
+        input.style.height = '';
+
+        const { error } = await _supabase.from('chat_messages').insert([{
+            sender_id: 'admin',
+            sender_name: 'Warunk Arsi',
+            sender_role: 'admin',
+            message: msg,
+            member_id: activeChatMemberId,
+            is_read_admin: true,
+            is_read_user: false
+        }]);
+
+        if (error) {
+            input.value = msg;
+            showToast('Gagal kirim pesan!', 'amber');
+        }
+    }
+
+    function handleAdminChatEnter(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            kirimPesanAdmin();
+        }
+    }
+
+    function autoResizeAdminChat(el) {
+        el.style.height = '';
+        el.style.height = Math.min(el.scrollHeight, 80) + 'px';
+    }
+
+    function filterChatList(val) {
+        renderAdminChatList(val);
+    }
+
+    function escapeAdminHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ── Realtime notif pesanan baru untuk admin (dari tab Antrean) ──
+    function setupAdminOrderNotif() {
+        _supabase.channel('admin-new-orders')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'orders'
+            }, (payload) => {
+                const o = payload.new;
+                // Tambahkan ke set pesanan belum dibuka
+                if (o.order_id) unopenedOrderIds.add(o.order_id);
+                // Mulai bunyi berulang
+                startOrderAlert();
+                showToast('🛒 Pesanan baru: ' + (o.order_id || '') + ' — ' + (o.member_name || 'Pelanggan'), 'amber');
+                // Update badge antrean
+                const badge = document.getElementById('badge-antrean');
+                if (badge) {
+                    const curr = parseInt(badge.textContent) || 0;
+                    badge.textContent = curr + 1;
+                    badge.classList.remove('hidden-badge');
+                }
+                // Refresh daftar antrean
+                fetchOrders();
+            })
+            .subscribe();
+    }
+
+    // Panggil setup order notif saat halaman admin load
+    const _origAdminLoad = window.onload;
+    window.onload = function() {
+        if (_origAdminLoad) _origAdminLoad();
+        setupAdminOrderNotif();
+        // Setup global chat listener untuk badge saat tab chat belum dibuka
+        setupAdminChatBadgeListener();
+    };
+
+    function setupAdminChatBadgeListener() {
+        _supabase.channel('admin-chat-badge')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'chat_messages',
+                filter: 'sender_role=eq.user'
+            }, (payload) => {
+                const isPanelChatActive = !document.getElementById('panel-chat').classList.contains('hidden');
+                const isActiveMember = payload.new.member_id === activeChatMemberId;
+                if (!isPanelChatActive || !isActiveMember) {
+                    adminTotalUnread++;
+                    updateAdminChatBadge();
+                    playAdminChatSound();
+                }
+            })
+            .subscribe();
     }
 </script>
 </body>
