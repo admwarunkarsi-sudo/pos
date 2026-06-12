@@ -2517,6 +2517,7 @@
                         <i class="fa-solid fa-magnifying-glass search-icon"></i>
                         <input type="text" id="search-menu-input" oninput="filterMenuTable()" placeholder="Cari ID, nama, atau kategori..." class="search-input">
                     </div>
+                    <button onclick="resetAllStok()" class="btn btn-sm" style="background:var(--red-100);color:var(--red-600);font-size:11px;padding:5px 10px;border-radius:6px;white-space:nowrap;"><i class="fa-solid fa-rotate-left"></i> Reset Semua Stok</button>
                     <button onclick="exportMenuCSV()" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-700);font-size:11px;padding:5px 10px;border-radius:6px;white-space:nowrap;"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
                 </div>
             </div>
@@ -3951,6 +3952,21 @@
         const pct = ((margin / hpp) * 100).toFixed(1);
         const rugi = margin < 0;
         cell.innerHTML = `<span class="margin-pill${rugi ? ' rugi' : ''}">${rugi ? '▼' : '▲'} ${pct}%<br><small style="font-weight:400;font-size:9px;">Rp ${Math.abs(margin).toLocaleString('id-ID')}</small></span>`;
+    }
+
+    async function resetAllStok() {
+        const nilai = prompt('Reset stok semua menu menjadi berapa? (default 0)', '0');
+        if (nilai === null) return;
+        const stokBaru = parseInt(nilai);
+        if (isNaN(stokBaru) || stokBaru < 0) { showToast('Nilai stok tidak valid!', 'amber'); return; }
+        if (!confirm(`Yakin ingin mereset STOK SEMUA MENU (${currentMenusCache.length} menu) menjadi ${stokBaru}?`)) return;
+
+        const ids = currentMenusCache.map(m => m.id);
+        const { error } = await _supabase.from('menu').update({ stok: stokBaru }).in('id', ids);
+
+        if (error) { showToast('Gagal reset stok!', 'amber'); return; }
+        showToast(`✅ Stok semua menu berhasil direset ke ${stokBaru}!`);
+        fetchMenuManagement();
     }
 
     function adjStok(id, delta) {
