@@ -4372,51 +4372,48 @@
        Jika belum ada → buat record baru dengan diinput_admin=true.
     ── */
     async function _syncKonsinyasiStok(menuId, stokBaru, mitraWA, mitraNama) {
-        if (!mitraWA) return; // hanya untuk menu mitra
+        if (!mitraWA) return;
         const today = new Date().toISOString().slice(0, 10);
 
         try {
-            // Cek record konsinyasi hari ini untuk mitra ini
             const { data: existing } = await _supabase
                 .from('konsinyasi_stok')
-                .select('id, detail, total_masuk, total_bayar, diinput_admin, edit_unlocked, status')
+                .select('id, detail, diinput_admin, edit_unlocked, status')
                 .eq('mitra_wa', mitraWA)
                 .eq('tanggal', today)
                 .maybeSingle();
 
             if (existing) {
-                // ── JANGAN overwrite jika:
-                //    (a) mitra sudah submit sendiri (diinput_admin=false, status=submitted)
-                //        → mitra yang pegang data, admin hanya bisa ubah via panel Konsinyasi
-                //    (b) edit_unlocked=true → mitra sedang dalam proses koreksi,
-                //        jangan ganggu nilainya
+                // Jangan overwrite jika mitra sudah submit sendiri atau sedang koreksi
                 const mitraSudahSubmit = !existing.diinput_admin && existing.status === 'submitted';
                 const mitraSedangKoreksi = existing.edit_unlocked === true;
                 if (mitraSudahSubmit || mitraSedangKoreksi) return;
 
-                // Update detail stok_masuk untuk menu yang bersangkutan
                 const detail = Array.isArray(existing.detail) ? [...existing.detail] : [];
                 const idx = detail.findIndex(d => d.menu_id === menuId);
                 if (idx > -1) {
+                    // Update stok_masuk saja — JANGAN ubah terjual (dihitung kasir)
+                    // JANGAN ubah retur (diisi admin via panel konsinyasi)
+                    // Reset is_verified ke false karena stok berubah, laporan perlu reverifikasi
                     detail[idx] = {
                         ...detail[idx],
                         stok_masuk: stokBaru,
-                        terjual: stokBaru,
-                        subtotal: stokBaru * (detail[idx].harga_beli || 0)
+                        subtotal:   stokBaru * (detail[idx].harga_beli || 0),
+                        is_verified: false
                     };
                     const totalMasuk = detail.reduce((s, d) => s + (parseInt(d.stok_masuk) || 0), 0);
                     const totalBayar = detail.reduce((s, d) => s + (parseInt(d.subtotal) || 0), 0);
                     await _supabase.from('konsinyasi_stok').update({
                         detail,
-                        total_masuk: totalMasuk,
-                        total_terjual: totalMasuk,
-                        total_bayar: totalBayar,
-                        diinput_admin: true,   // tandai: admin yang terakhir update
-                        updated_at: new Date().toISOString()
+                        total_masuk:   totalMasuk,
+                        total_bayar:   totalBayar,
+                        is_verified:   false,   // perlu reverifikasi karena stok berubah
+                        diinput_admin: true,
+                        updated_at:    new Date().toISOString()
                     }).eq('id', existing.id);
                 }
             } else {
-                // Belum ada record hari ini → buat baru dengan diinput_admin=true
+                // Belum ada record → buat baru
                 const { data: produkMitra } = await _supabase
                     .from('menu')
                     .select('id, nama, harga_beli, stok')
@@ -4426,30 +4423,31 @@
                 if (!produkMitra || produkMitra.length === 0) return;
 
                 const detail = produkMitra.map(p => ({
-                    menu_id: p.id,
-                    nama: p.nama,
-                    harga_beli: p.harga_beli || 0,
-                    stok_masuk: p.id === menuId ? stokBaru : (parseInt(p.stok) || 0),
-                    retur: 0,
-                    terjual: p.id === menuId ? stokBaru : (parseInt(p.stok) || 0),
-                    subtotal: (p.id === menuId ? stokBaru : (parseInt(p.stok) || 0)) * (p.harga_beli || 0),
+                    menu_id:     p.id,
+                    nama:        p.nama,
+                    harga_beli:  p.harga_beli || 0,
+                    stok_masuk:  p.id === menuId ? stokBaru : (parseInt(p.stok) || 0),
+                    retur:       0,
+                    terjual:     0,    // belum ada transaksi kasir, jangan isi estimasi
+                    subtotal:    (p.id === menuId ? stokBaru : (parseInt(p.stok) || 0)) * (p.harga_beli || 0),
                     is_verified: false
                 }));
 
                 const totalMasuk = detail.reduce((s, d) => s + d.stok_masuk, 0);
                 await _supabase.from('konsinyasi_stok').insert([{
-                    mitra_wa: mitraWA,
-                    mitra_nama: mitraNama || mitraWA,
-                    tanggal: today,
-                    total_masuk: totalMasuk,
-                    total_retur: 0,
-                    total_terjual: totalMasuk,
-                    total_bayar: detail.reduce((s, d) => s + d.subtotal, 0),
+                    mitra_wa:      mitraWA,
+                    mitra_nama:    mitraNama || mitraWA,
+                    tanggal:       today,
+                    total_masuk:   totalMasuk,
+                    total_retur:   0,
+                    total_terjual: 0,    // belum ada data kasir
+                    total_bayar:   detail.reduce((s, d) => s + d.subtotal, 0),
                     detail,
-                    status: 'submitted',
+                    status:        'submitted',
+                    is_verified:   false,
                     diinput_admin: true,
                     edit_unlocked: false,
-                    updated_at: new Date().toISOString()
+                    updated_at:    new Date().toISOString()
                 }]);
             }
         } catch (e) {
@@ -4538,33 +4536,44 @@
 
         // Sync konsinyasi_stok per mitra (satu record per mitra per hari)
         for (const [wa, { nama, items }] of Object.entries(mitraMenuMap)) {
-            // Ambil satu record konsinyasi hari ini untuk mitra ini
             const today = new Date().toISOString().slice(0, 10);
             const { data: existing } = await _supabase
                 .from('konsinyasi_stok')
-                .select('id, detail, diinput_admin')
+                .select('id, detail, diinput_admin, edit_unlocked, status')
                 .eq('mitra_wa', wa)
                 .eq('tanggal', today)
                 .maybeSingle();
 
             if (existing && Array.isArray(existing.detail)) {
-                // Update semua item yang di-sinkron sekaligus
+                // Jangan overwrite jika mitra sudah submit sendiri atau sedang koreksi
+                const mitraSudahSubmit = !existing.diinput_admin && existing.status === 'submitted';
+                const mitraSedangKoreksi = existing.edit_unlocked === true;
+                if (mitraSudahSubmit || mitraSedangKoreksi) continue;
+
                 const detail = [...existing.detail];
                 items.forEach(({ id, stok }) => {
                     const di = detail.findIndex(d => d.menu_id === id);
                     if (di > -1) {
-                        detail[di] = { ...detail[di], stok_masuk: stok, terjual: stok, subtotal: stok * (detail[di].harga_beli || 0) };
+                        // Update stok_masuk saja, jangan sentuh terjual/retur
+                        detail[di] = {
+                            ...detail[di],
+                            stok_masuk:  stok,
+                            subtotal:    stok * (detail[di].harga_beli || 0),
+                            is_verified: false
+                        };
                     }
                 });
                 const totalMasuk = detail.reduce((s, d) => s + (parseInt(d.stok_masuk) || 0), 0);
                 const totalBayar = detail.reduce((s, d) => s + (parseInt(d.subtotal) || 0), 0);
                 await _supabase.from('konsinyasi_stok').update({
-                    detail, total_masuk: totalMasuk, total_terjual: totalMasuk,
-                    total_bayar: totalBayar, diinput_admin: true,
-                    updated_at: new Date().toISOString()
+                    detail,
+                    total_masuk:   totalMasuk,
+                    total_bayar:   totalBayar,
+                    is_verified:   false,
+                    diinput_admin: true,
+                    updated_at:    new Date().toISOString()
                 }).eq('id', existing.id);
             } else if (!existing) {
-                // Buat record baru via helper (gunakan item pertama sebagai trigger)
                 if (items.length > 0) await _syncKonsinyasiStok(items[0].id, items[0].stok, wa, nama);
             }
         }
@@ -5532,21 +5541,111 @@
        items = array { nama, qty }
        Ambil menu by nama → kurangi stok, pastikan tidak < 0.
     ──────────────────────────────────────────────────────────────── */
+    /* ── Update terjual di konsinyasi_stok saat transaksi kasir selesai ──
+       Dipanggil setelah insert orders berhasil.
+       Hanya update produk yang mitra_wa-nya ada (produk konsinyasi).
+       Ini yang membuat tab Laporan di Portal Mitra update otomatis via realtime channel.
+    ── */
+    async function _updateKonsinyasiTerjual(detailItems) {
+        // Filter hanya produk mitra konsinyasi
+        const mitraItems = detailItems.filter(item => {
+            const menu = currentMenusCache.find(m =>
+                (item.menu_id && m.id === item.menu_id) || m.nama === item.nama
+            );
+            return menu && menu.mitra_wa;
+        });
+        if (!mitraItems.length) return;
+
+        const today = new Date().toISOString().slice(0, 10);
+
+        // Kelompokkan per mitra_wa
+        const perMitra = {};
+        mitraItems.forEach(item => {
+            const menu = currentMenusCache.find(m =>
+                (item.menu_id && m.id === item.menu_id) || m.nama === item.nama
+            );
+            if (!menu) return;
+            const wa = menu.mitra_wa;
+            if (!perMitra[wa]) perMitra[wa] = [];
+            perMitra[wa].push({ menu_id: menu.id, nama: menu.nama, qty: item.qty || 1 });
+        });
+
+        for (const [wa, items] of Object.entries(perMitra)) {
+            try {
+                const { data: kons } = await _supabase
+                    .from('konsinyasi_stok')
+                    .select('id, detail, total_terjual, total_bayar')
+                    .eq('mitra_wa', wa)
+                    .eq('tanggal', today)
+                    .maybeSingle();
+
+                if (!kons || !Array.isArray(kons.detail)) continue;
+
+                const detail = [...kons.detail];
+                items.forEach(({ menu_id, nama, qty }) => {
+                    const di = detail.findIndex(d => d.menu_id === menu_id || d.nama === nama);
+                    if (di > -1) {
+                        const terjualBaru = (parseInt(detail[di].terjual) || 0) + qty;
+                        detail[di] = {
+                            ...detail[di],
+                            terjual:  terjualBaru,
+                            // subtotal dihitung dari terjual × harga_beli
+                            subtotal: terjualBaru * (detail[di].harga_beli || 0)
+                        };
+                    }
+                });
+
+                const totalTerjual = detail.reduce((s, d) => s + (parseInt(d.terjual) || 0), 0);
+                const totalBayar   = detail.reduce((s, d) => s + (parseInt(d.subtotal) || 0), 0);
+
+                await _supabase.from('konsinyasi_stok').update({
+                    detail,
+                    total_terjual: totalTerjual,
+                    total_bayar:   totalBayar,
+                    updated_at:    new Date().toISOString()
+                }).eq('id', kons.id);
+
+                // Reset cache penjualan agar rekap ikut terupdate
+                _konsinyasiSalesCache = { tanggal: null, byMenu: {} };
+
+            } catch (e) {
+                console.warn('[pos] _updateKonsinyasiTerjual error:', e);
+            }
+        }
+    }
+
     async function decrementStok(items) {
         if (!items || items.length === 0) return;
         for (const item of items) {
             try {
-                // Ambil stok saat ini berdasarkan nama produk
-                const { data: menuData, error: fetchErr } = await _supabase
-                    .from('menu')
-                    .select('id, stok')
-                    .eq('nama', item.nama)
-                    .maybeSingle();
-                if (fetchErr || !menuData) continue;
-                // Hanya kurangi stok jika nilainya angka (bukan null = unlimited)
-                if (menuData.stok === null || menuData.stok === undefined) continue;
-                const stokBaru = Math.max(0, (parseInt(menuData.stok) || 0) - (item.qty || 1));
-                await _supabase.from('menu').update({ stok: stokBaru }).eq('id', menuData.id);
+                let menuId = null;
+                let stokSaatIni = null;
+
+                if (item.menu_id) {
+                    // Order baru: langsung pakai menu_id (akurat, tidak perlu query by nama)
+                    const { data: menuData } = await _supabase
+                        .from('menu')
+                        .select('id, stok')
+                        .eq('id', item.menu_id)
+                        .maybeSingle();
+                    if (!menuData) continue;
+                    menuId = menuData.id;
+                    stokSaatIni = menuData.stok;
+                } else {
+                    // Order lama (belum punya menu_id): fallback ke query by nama
+                    const { data: menuData } = await _supabase
+                        .from('menu')
+                        .select('id, stok')
+                        .eq('nama', item.nama)
+                        .maybeSingle();
+                    if (!menuData) continue;
+                    menuId = menuData.id;
+                    stokSaatIni = menuData.stok;
+                }
+
+                if (stokSaatIni === null || stokSaatIni === undefined) continue;
+                const stokBaru = Math.max(0, (parseInt(stokSaatIni) || 0) - (item.qty || 1));
+                await _supabase.from('menu').update({ stok: stokBaru }).eq('id', menuId);
             } catch (e) {
                 console.warn('decrementStok error for', item.nama, e);
             }
@@ -5576,7 +5675,7 @@
         const catatan = document.getElementById('kasir-catatan')?.value.trim() || '';
         const isDp = selectedPayment === 'dp';
         const orderId = (isDp ? 'DP-' : 'WLK-') + Date.now().toString().slice(-6);
-        const detailItems = cartItems.map(i => ({ nama: i.nama, harga: i.harga, qty: i.qty }));
+        const detailItems = cartItems.map(i => ({ menu_id: i.id || null, nama: i.nama, harga: i.harga, qty: i.qty }));
         const catatanFinalProses = isDp ? `[DP Rp ${dpNominal.toLocaleString('id-ID')} / sisa Rp ${(total-dpNominal).toLocaleString('id-ID')}]${catatan ? ' ' + catatan : ''}` : catatan;
 
         // ── Mode edit: UPDATE pesanan terbuka yang ada, bukan insert baru ──
@@ -5599,7 +5698,11 @@
                 return;
             }
 
-            if (!isDp) await decrementStok(detailItems);
+            if (!isDp) {
+                await decrementStok(detailItems);
+                // Update terjual di konsinyasi_stok agar laporan mitra terupdate realtime
+                _updateKonsinyasiTerjual(detailItems);
+            }
             if (typeof loadMenuData === 'function') loadMenuData();
             else if (typeof loadData === 'function') loadData();
 
@@ -5658,6 +5761,8 @@
         // Hanya kurangi stok saat jam operasional (bukan pre-order)
         if (!isDp) {
             await decrementStok(detailItems);
+            // Update terjual di konsinyasi_stok agar laporan mitra terupdate realtime
+            _updateKonsinyasiTerjual(detailItems);
         }
         if (typeof loadMenuData === 'function') loadMenuData();
         else if (typeof loadData === 'function') loadData();
@@ -6348,9 +6453,10 @@
             return _konsinyasiSalesCache.byMenu;
         }
 
-        // Rentang waktu tanggal (UTC-aware: pakai prefix tanggal saja)
-        const from = tgl + 'T00:00:00';
-        const to   = tgl + 'T23:59:59';
+        // Rentang waktu tanggal dalam WIB (UTC+7)
+        // Supabase menyimpan created_at dalam UTC, maka kita offset +7 jam
+        const from = tgl + 'T00:00:00+07:00';
+        const to   = tgl + 'T23:59:59+07:00';
 
         const { data, error } = await _supabase
             .from('orders')
@@ -6364,7 +6470,8 @@
         data.forEach(order => {
             const sumber = order.sumber === 'manual' ? 'kasir' : 'online';
             (order.detail_items || []).forEach(item => {
-                const key = item.nama; // cocokkan dengan nama produk mitra
+                // Gunakan menu_id sebagai key utama (akurat), nama sebagai fallback (order lama)
+                const key = item.menu_id || item.nama;
                 if (!byMenu[key]) byMenu[key] = { kasir: 0, online: 0 };
                 byMenu[key][sumber] += item.qty || 0;
             });
@@ -6403,7 +6510,7 @@
             totalBayar   += k.total_bayar   || 0;
             // hitung terjual riil dari detail produk
             (k.detail || []).forEach(d => {
-                const sales = salesByMenu[d.nama] || {};
+                const sales = salesByMenu[d.menu_id] || salesByMenu[d.nama] || {};
                 const kasirQty  = sales.kasir  || 0;
                 const onlineQty = sales.online || 0;
                 totalKasir  += kasirQty;
@@ -6443,7 +6550,7 @@
             // Hitung terjual per produk dari sumber penjualan
             let mitraKasir = 0, mitraOnline = 0, mitraTerjual = 0, mitraSisa = 0;
             const prodRows = detail.map(d => {
-                const sales    = salesByMenu[d.nama] || {};
+                const sales    = salesByMenu[d.menu_id] || salesByMenu[d.nama] || {};
                 const kasirQty  = sales.kasir  || 0;
                 const onlineQty = sales.online || 0;
                 const terjual   = kasirQty + onlineQty;
@@ -7174,7 +7281,7 @@
         const namaPelanggan = document.getElementById('kasir-nama-pelanggan')?.value.trim() || 'Walk-In';
         const catatan = document.getElementById('kasir-catatan')?.value.trim() || '';
         const orderId = 'ANT-' + Date.now().toString().slice(-6);
-        const detailItems = cartItems.map(i => ({ nama: i.nama, harga: i.harga, qty: i.qty }));
+        const detailItems = cartItems.map(i => ({ menu_id: i.id || null, nama: i.nama, harga: i.harga, qty: i.qty }));
 
         // Sertakan info metode bayar di catatan agar tampil di kartu pesanan terbuka
         const metodeBayar = selectedPayment === 'dp' ? 'DP' : selectedPayment.toUpperCase();
