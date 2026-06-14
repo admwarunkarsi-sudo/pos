@@ -4434,6 +4434,87 @@
         el._timer = setTimeout(() => { el.style.display = 'none'; }, 8000);
     }
 
+    /* ─────────────────────────────────────────────────────────────────
+       _adminInputStokKelolaMitra
+       Dipanggil saat admin klik Simpan / Edit pada produk mitra di
+       Kelola Menu. Mencatat ke konsinyasi_stok dengan diinput_admin=true
+       sehingga Portal Mitra otomatis terkunci + banner "Diinput Admin".
+
+       Normalisasi WA: query pakai format SAMA PERSIS dengan yang
+       tersimpan di kolom mitra_wa tabel menu (diambil dari cache),
+       sehingga .eq() pasti cocok.
+    ───────────────────────────────────────────────────────────────── */
+    async function _adminInputStokKelolaMitra(menuId, mitraWa, mitraNama, stokBaru, hargaBeli) {
+        if (!mitraWa) return;
+        const today    = new Date().toISOString().slice(0, 10);
+        const hpp      = hargaBeli || 0;
+        const namaProd = (currentMenusCache.find(x => x.id === menuId)?.nama) || menuId;
+
+        // Cek record hari ini — query dengan nilai mitra_wa PERSIS seperti di DB
+        const { data: existing, error: fetchErr } = await _supabase
+            .from('konsinyasi_stok')
+            .select('*')
+            .eq('mitra_wa', mitraWa)
+            .eq('tanggal', today)
+            .maybeSingle();
+
+        if (fetchErr) {
+            console.warn('[adminInputStok] fetch error:', fetchErr.message);
+            return;
+        }
+
+        // Jika mitra sudah input sendiri (diinput_admin=false/null) dan belum di-unlock → jangan timpa
+        if (existing && existing.diinput_admin !== true && existing.edit_unlocked !== true) {
+            console.log('[adminInputStok] Mitra sudah input sendiri, skip lock.');
+            return;
+        }
+
+        if (existing) {
+            // Perbarui detail produk ini saja dalam record yang ada
+            const detailLama = Array.isArray(existing.detail) ? existing.detail : [];
+            const detailBaru = [
+                ...detailLama.filter(d => d.menu_id !== menuId),
+                { menu_id: menuId, nama: namaProd, harga_beli: hpp,
+                  stok_masuk: stokBaru, retur: 0, terjual: stokBaru,
+                  subtotal: stokBaru * hpp, is_verified: false }
+            ];
+            const totalMasuk = detailBaru.reduce((s, d) => s + (d.stok_masuk || 0), 0);
+            const { error: updErr } = await _supabase.from('konsinyasi_stok').update({
+                detail:        detailBaru,
+                total_masuk:   totalMasuk,
+                total_terjual: totalMasuk,
+                total_bayar:   detailBaru.reduce((s, d) => s + (d.subtotal || 0), 0),
+                diinput_admin: true,
+                edit_unlocked: false,
+                edit_request:  false,
+                status:        'submitted',
+                updated_at:    new Date().toISOString()
+            }).eq('id', existing.id);
+            if (updErr) console.warn('[adminInputStok] update error:', updErr.message);
+        } else {
+            // Buat record baru hari ini
+            const detail = [{ menu_id: menuId, nama: namaProd, harga_beli: hpp,
+                              stok_masuk: stokBaru, retur: 0, terjual: stokBaru,
+                              subtotal: stokBaru * hpp, is_verified: false }];
+            const { error: insErr } = await _supabase.from('konsinyasi_stok').insert([{
+                mitra_wa:      mitraWa,
+                mitra_nama:    mitraNama || mitraWa,
+                tanggal:       today,
+                total_masuk:   stokBaru,
+                total_retur:   0,
+                total_terjual: stokBaru,
+                total_bayar:   stokBaru * hpp,
+                detail,
+                status:        'submitted',
+                diinput_admin: true,
+                edit_unlocked: false,
+                edit_request:  false,
+                updated_at:    new Date().toISOString()
+            }]);
+            if (insErr) console.warn('[adminInputStok] insert error:', insErr.message);
+        }
+    }
+
     async function updateSingleMenu(id) {
         const nama = document.getElementById(`name-${id}`).value.trim();
         const kategori = document.getElementById(`kat-${id}`).value.trim();
@@ -4448,9 +4529,16 @@
         updatePayload.stok = parseInt(document.getElementById(`stok-${id}`).value) || 0;
 
         const { error } = await _supabase.from('menu').update(updatePayload).eq('id', id);
-
         if (error) { showToast('Gagal update menu!', 'amber'); return; }
-        showToast('✅ Menu berhasil diupdate!');
+
+        // Jika menu milik mitra → catat ke konsinyasi & kunci Portal Mitra
+        const menuData = currentMenusCache.find(x => x.id === id);
+        if (menuData?.mitra_wa) {
+            await _adminInputStokKelolaMitra(id, menuData.mitra_wa, menuData.mitra_nama, updatePayload.stok, harga_beli);
+            showToast('✅ Stok disimpan & Portal Mitra dikunci (diinput admin)!');
+        } else {
+            showToast('✅ Menu berhasil diupdate!');
+        }
         fetchMenuManagement();
     }
 
@@ -4582,7 +4670,13 @@
         } else {
             const { error } = await _supabase.from('menu').update(updatePayload).eq('id', editMenuCurrentId);
             if (error) { showToast('Gagal menyimpan! ' + (error.message || ''), 'amber'); return; }
-            showToast('✅ Menu berhasil diperbarui!' + (!isJamOperasional() ? ' (Stok tidak diubah — di luar jam operasional)' : ''));
+            // Jika menu milik mitra → catat ke konsinyasi & kunci Portal Mitra
+            if (mitra_wa) {
+                await _adminInputStokKelolaMitra(editMenuCurrentId, mitra_wa, mitra_nama, updatePayload.stok, harga_beli);
+                showToast('✅ Menu diperbarui & Portal Mitra dikunci (diinput admin)!');
+            } else {
+                showToast('✅ Menu berhasil diperbarui!' + (!isJamOperasional() ? ' (Di luar jam operasional)' : ''));
+            }
         }
         closeEditMenuModal();
         fetchMenuManagement();
