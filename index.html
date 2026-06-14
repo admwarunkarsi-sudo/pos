@@ -1358,6 +1358,17 @@
             border-radius: var(--radius);
             font-size: 11px; font-weight: 800; color: #fff;
         }
+        /* Badge stok real-time di pojok kanan bawah kartu kasir */
+        .menu-card-item .stok-realtime {
+            position: absolute; bottom: 30px; right: 5px;
+            font-size: 9px; font-weight: 800; padding: 2px 6px;
+            border-radius: 4px; border: 1px solid transparent;
+            pointer-events: none; line-height: 1.3;
+        }
+        .menu-card-item .stok-realtime.ok   { background:#dcfce7; color:#15803d; border-color:#bbf7d0; }
+        .menu-card-item .stok-realtime.low  { background:#fef3c7; color:#d97706; border-color:#fde68a; }
+        .menu-card-item .stok-realtime.zero { background:#fee2e2; color:#dc2626; border-color:#fca5a5; }
+        .menu-card-item .stok-realtime.po   { background:#e0f2fe; color:#0369a1; border-color:#bae6fd; }
         .menu-cat-tabs {
             display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;
         }
@@ -4434,87 +4445,6 @@
         el._timer = setTimeout(() => { el.style.display = 'none'; }, 8000);
     }
 
-    /* ─────────────────────────────────────────────────────────────────
-       _adminInputStokKelolaMitra
-       Dipanggil saat admin klik Simpan / Edit pada produk mitra di
-       Kelola Menu. Mencatat ke konsinyasi_stok dengan diinput_admin=true
-       sehingga Portal Mitra otomatis terkunci + banner "Diinput Admin".
-
-       Normalisasi WA: query pakai format SAMA PERSIS dengan yang
-       tersimpan di kolom mitra_wa tabel menu (diambil dari cache),
-       sehingga .eq() pasti cocok.
-    ───────────────────────────────────────────────────────────────── */
-    async function _adminInputStokKelolaMitra(menuId, mitraWa, mitraNama, stokBaru, hargaBeli) {
-        if (!mitraWa) return;
-        const today    = new Date().toISOString().slice(0, 10);
-        const hpp      = hargaBeli || 0;
-        const namaProd = (currentMenusCache.find(x => x.id === menuId)?.nama) || menuId;
-
-        // Cek record hari ini — query dengan nilai mitra_wa PERSIS seperti di DB
-        const { data: existing, error: fetchErr } = await _supabase
-            .from('konsinyasi_stok')
-            .select('*')
-            .eq('mitra_wa', mitraWa)
-            .eq('tanggal', today)
-            .maybeSingle();
-
-        if (fetchErr) {
-            console.warn('[adminInputStok] fetch error:', fetchErr.message);
-            return;
-        }
-
-        // Jika mitra sudah input sendiri (diinput_admin=false/null) dan belum di-unlock → jangan timpa
-        if (existing && existing.diinput_admin !== true && existing.edit_unlocked !== true) {
-            console.log('[adminInputStok] Mitra sudah input sendiri, skip lock.');
-            return;
-        }
-
-        if (existing) {
-            // Perbarui detail produk ini saja dalam record yang ada
-            const detailLama = Array.isArray(existing.detail) ? existing.detail : [];
-            const detailBaru = [
-                ...detailLama.filter(d => d.menu_id !== menuId),
-                { menu_id: menuId, nama: namaProd, harga_beli: hpp,
-                  stok_masuk: stokBaru, retur: 0, terjual: stokBaru,
-                  subtotal: stokBaru * hpp, is_verified: false }
-            ];
-            const totalMasuk = detailBaru.reduce((s, d) => s + (d.stok_masuk || 0), 0);
-            const { error: updErr } = await _supabase.from('konsinyasi_stok').update({
-                detail:        detailBaru,
-                total_masuk:   totalMasuk,
-                total_terjual: totalMasuk,
-                total_bayar:   detailBaru.reduce((s, d) => s + (d.subtotal || 0), 0),
-                diinput_admin: true,
-                edit_unlocked: false,
-                edit_request:  false,
-                status:        'submitted',
-                updated_at:    new Date().toISOString()
-            }).eq('id', existing.id);
-            if (updErr) console.warn('[adminInputStok] update error:', updErr.message);
-        } else {
-            // Buat record baru hari ini
-            const detail = [{ menu_id: menuId, nama: namaProd, harga_beli: hpp,
-                              stok_masuk: stokBaru, retur: 0, terjual: stokBaru,
-                              subtotal: stokBaru * hpp, is_verified: false }];
-            const { error: insErr } = await _supabase.from('konsinyasi_stok').insert([{
-                mitra_wa:      mitraWa,
-                mitra_nama:    mitraNama || mitraWa,
-                tanggal:       today,
-                total_masuk:   stokBaru,
-                total_retur:   0,
-                total_terjual: stokBaru,
-                total_bayar:   stokBaru * hpp,
-                detail,
-                status:        'submitted',
-                diinput_admin: true,
-                edit_unlocked: false,
-                edit_request:  false,
-                updated_at:    new Date().toISOString()
-            }]);
-            if (insErr) console.warn('[adminInputStok] insert error:', insErr.message);
-        }
-    }
-
     async function updateSingleMenu(id) {
         const nama = document.getElementById(`name-${id}`).value.trim();
         const kategori = document.getElementById(`kat-${id}`).value.trim();
@@ -4529,16 +4459,9 @@
         updatePayload.stok = parseInt(document.getElementById(`stok-${id}`).value) || 0;
 
         const { error } = await _supabase.from('menu').update(updatePayload).eq('id', id);
-        if (error) { showToast('Gagal update menu!', 'amber'); return; }
 
-        // Jika menu milik mitra → catat ke konsinyasi & kunci Portal Mitra
-        const menuData = currentMenusCache.find(x => x.id === id);
-        if (menuData?.mitra_wa) {
-            await _adminInputStokKelolaMitra(id, menuData.mitra_wa, menuData.mitra_nama, updatePayload.stok, harga_beli);
-            showToast('✅ Stok disimpan & Portal Mitra dikunci (diinput admin)!');
-        } else {
-            showToast('✅ Menu berhasil diupdate!');
-        }
+        if (error) { showToast('Gagal update menu!', 'amber'); return; }
+        showToast('✅ Menu berhasil diupdate!');
         fetchMenuManagement();
     }
 
@@ -4670,13 +4593,7 @@
         } else {
             const { error } = await _supabase.from('menu').update(updatePayload).eq('id', editMenuCurrentId);
             if (error) { showToast('Gagal menyimpan! ' + (error.message || ''), 'amber'); return; }
-            // Jika menu milik mitra → catat ke konsinyasi & kunci Portal Mitra
-            if (mitra_wa) {
-                await _adminInputStokKelolaMitra(editMenuCurrentId, mitra_wa, mitra_nama, updatePayload.stok, harga_beli);
-                showToast('✅ Menu diperbarui & Portal Mitra dikunci (diinput admin)!');
-            } else {
-                showToast('✅ Menu berhasil diperbarui!' + (!isJamOperasional() ? ' (Di luar jam operasional)' : ''));
-            }
+            showToast('✅ Menu berhasil diperbarui!' + (!isJamOperasional() ? ' (Stok tidak diubah — di luar jam operasional)' : ''));
         }
         closeEditMenuModal();
         fetchMenuManagement();
@@ -5057,18 +4974,26 @@
 
             const efektifHabis = isHabis || stokFsHabis || dilluarWaktuFs;
 
-            // Badge stok di sudut kanan atas kartu
+            // ── Badge stok real-time: selalu tampil di setiap kartu ──
             let stokBadge = '';
-            if (isFlash && !efektifHabis && stokFs !== null && stokFs <= 5 && stokFs > 0) {
-                stokBadge = '<span style="position:absolute;top:5px;right:5px;background:#fef3c7;color:#d97706;font-size:7px;font-weight:900;padding:2px 5px;border-radius:4px;border:1px solid #fde68a;">FS Sisa ' + stokFs + '</span>';
-            } else if (jamBuka && m.is_tersedia) {
-                if (stokNum === 0) {
-                    stokBadge = '<span style="position:absolute;top:5px;right:5px;background:#fee2e2;color:#dc2626;font-size:7px;font-weight:900;padding:2px 5px;border-radius:4px;border:1px solid #fca5a5;">Stok 0</span>';
-                } else if (stokNum !== null && stokNum <= 5) {
-                    stokBadge = '<span style="position:absolute;top:5px;right:5px;background:#fef3c7;color:#d97706;font-size:7px;font-weight:900;padding:2px 5px;border-radius:4px;border:1px solid #fde68a;">Sisa ' + stokNum + '</span>';
+            if (isFlash && stokFs !== null) {
+                // Flash sale aktif dengan stok FS spesifik
+                if (stokFs === 0) {
+                    stokBadge = '<span class="stok-realtime zero">FS Habis</span>';
+                } else if (stokFs <= 5) {
+                    stokBadge = '<span class="stok-realtime low">FS ' + stokFs + ' sisa</span>';
+                } else {
+                    stokBadge = '<span class="stok-realtime ok">FS ' + stokFs + ' pcs</span>';
                 }
-            } else if (!jamBuka && m.is_tersedia) {
-                stokBadge = '<span style="position:absolute;top:5px;right:5px;background:#e0f2fe;color:#0369a1;font-size:7px;font-weight:900;padding:2px 5px;border-radius:4px;border:1px solid #bae6fd;">\u221e PO</span>';
+            } else if (stokNum === null) {
+                // Stok tidak di-set (unlimited / pre-order)
+                stokBadge = '<span class="stok-realtime po">∞ PO</span>';
+            } else if (stokNum === 0) {
+                stokBadge = '<span class="stok-realtime zero">Stok 0</span>';
+            } else if (stokNum <= 5) {
+                stokBadge = '<span class="stok-realtime low">Sisa ' + stokNum + '</span>';
+            } else {
+                stokBadge = '<span class="stok-realtime ok">' + stokNum + ' pcs</span>';
             }
 
             // Badge waktu flash sale di bawah harga
