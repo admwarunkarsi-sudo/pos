@@ -1794,6 +1794,122 @@
             .form-grid-2 { grid-template-columns: 1fr; }
             .search-wrap { max-width: 100%; }
         }
+        /* ─── LOGIN OVERLAY ─── */
+        #login-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: linear-gradient(135deg, #0a3d1f 0%, #0f5132 50%, #15803d 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        #login-overlay.hidden { display: none; }
+
+        .login-box {
+            background: #fff;
+            border-radius: 20px;
+            padding: 40px 36px;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0,0,0,.35);
+            animation: loginFadeIn .4s ease;
+        }
+        @keyframes loginFadeIn {
+            from { opacity: 0; transform: translateY(20px) scale(.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .login-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+        .login-logo-icon {
+            width: 52px; height: 52px;
+            background: linear-gradient(135deg, #166534, #22c55e);
+            border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; color: #fff;
+            box-shadow: 0 4px 14px rgba(22,163,74,.4);
+        }
+        .login-logo-text { line-height: 1.2; }
+        .login-logo-title { font-size: 18px; font-weight: 800; color: #111827; }
+        .login-logo-sub   { font-size: 11px; color: #6b7280; margin-top: 2px; }
+
+        .login-field { margin-bottom: 16px; }
+        .login-field label {
+            display: block;
+            font-size: 11px; font-weight: 700;
+            color: #374151; margin-bottom: 6px; letter-spacing: .4px;
+        }
+        .login-input-wrap { position: relative; }
+        .login-input-wrap i.field-icon {
+            position: absolute; left: 12px; top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af; font-size: 14px;
+        }
+        .login-input {
+            width: 100%;
+            padding: 11px 12px 11px 38px;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 10px;
+            font-family: var(--font);
+            font-size: 14px; color: #111827;
+            background: #f9fafb;
+            outline: none;
+            transition: border-color .15s, box-shadow .15s;
+        }
+        .login-input:focus {
+            border-color: #16a34a;
+            box-shadow: 0 0 0 3px rgba(22,163,74,.12);
+            background: #fff;
+        }
+        .login-toggle-pw {
+            position: absolute; right: 12px; top: 50%;
+            transform: translateY(-50%);
+            background: none; border: none; cursor: pointer;
+            color: #9ca3af; font-size: 14px; padding: 2px 4px;
+        }
+        .login-toggle-pw:hover { color: #374151; }
+
+        .login-error {
+            background: #fee2e2; color: #dc2626;
+            border: 1px solid #fecaca; border-radius: 8px;
+            padding: 9px 12px; font-size: 12px; font-weight: 600;
+            margin-bottom: 16px; display: none;
+            align-items: center; gap: 7px;
+        }
+        .login-error.show { display: flex; }
+
+        .login-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            color: #fff; border: none; border-radius: 10px;
+            padding: 13px; font-family: var(--font);
+            font-size: 14px; font-weight: 700; cursor: pointer;
+            transition: opacity .15s, transform .1s;
+            box-shadow: 0 4px 14px rgba(22,163,74,.35);
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .login-btn:hover { opacity: .93; }
+        .login-btn:active { transform: scale(.98); }
+        .login-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+        .login-footer {
+            text-align: center; margin-top: 20px;
+            font-size: 11px; color: #9ca3af;
+        }
+
+        /* Shake animation on wrong password */
+        @keyframes loginShake {
+            0%,100% { transform: translateX(0); }
+            20%,60%  { transform: translateX(-6px); }
+            40%,80%  { transform: translateX(6px); }
+        }
+        .login-box.shake { animation: loginShake .4s ease; }
     </style>
 
     <!-- ─── BLUETOOTH THERMAL PRINTER ENGINE (ESC/POS) ─── -->
@@ -2082,7 +2198,60 @@
 </head>
 <body>
 
-<div class="app-wrapper">
+<!-- ─── LOGIN OVERLAY ─── -->
+<div id="login-overlay">
+    <div class="login-box" id="login-box">
+        <div class="login-logo">
+            <div class="login-logo-icon">
+                <i class="fa-solid fa-cash-register"></i>
+            </div>
+            <div class="login-logo-text">
+                <div class="login-logo-title">WARUNK ARSI</div>
+                <div class="login-logo-sub">Sistem Kasir &amp; POS</div>
+            </div>
+        </div>
+
+        <div class="login-field">
+            <label>Nomor WhatsApp</label>
+            <div class="login-input-wrap">
+                <i class="fa-brands fa-whatsapp field-icon" style="color:#25d366;"></i>
+                <input type="tel" id="login-wa" class="login-input"
+                    placeholder="Contoh: 6285175150408"
+                    autocomplete="username"
+                    onkeydown="if(event.key==='Enter')document.getElementById('login-pw').focus()">
+            </div>
+        </div>
+
+        <div class="login-field">
+            <label>Password</label>
+            <div class="login-input-wrap">
+                <i class="fa-solid fa-lock field-icon"></i>
+                <input type="password" id="login-pw" class="login-input"
+                    placeholder="Masukkan password"
+                    autocomplete="current-password"
+                    onkeydown="if(event.key==='Enter')doLogin()">
+                <button type="button" class="login-toggle-pw" onclick="toggleLoginPw()" id="login-toggle-btn" title="Tampilkan/Sembunyikan">
+                    <i class="fa-solid fa-eye" id="login-eye-icon"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="login-error" id="login-error">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <span id="login-error-text">Nomor WhatsApp atau password salah.</span>
+        </div>
+
+        <button class="login-btn" id="login-btn" onclick="doLogin()">
+            <i class="fa-solid fa-right-to-bracket"></i> Masuk ke Kasir
+        </button>
+
+        <div class="login-footer">
+            &copy; 2024 Warunk Arsi &mdash; Admin Only
+        </div>
+    </div>
+</div>
+
+<div class="app-wrapper" id="main-app" style="display:none;">
 
     <!-- ─── OFFLINE BAR ─── -->
     <div id="offline-bar" class="offline-bar">
@@ -2517,8 +2686,39 @@
                         <i class="fa-solid fa-magnifying-glass search-icon"></i>
                         <input type="text" id="search-menu-input" oninput="filterMenuTable()" placeholder="Cari ID, nama, atau kategori..." class="search-input">
                     </div>
+                    <button onclick="filterMenuMitraOnly()" id="btn-filter-mitra" class="btn btn-sm" style="background:var(--amber-50);color:var(--amber-600);border:1.5px solid var(--amber-200);font-size:11px;padding:5px 10px;border-radius:6px;white-space:nowrap;"><i class="fa-solid fa-handshake"></i> Tampilkan Mitra</button>
                     <button onclick="resetAllStok()" class="btn btn-sm" style="background:var(--red-100);color:var(--red-600);font-size:11px;padding:5px 10px;border-radius:6px;white-space:nowrap;"><i class="fa-solid fa-rotate-left"></i> Reset Semua Stok</button>
                     <button onclick="exportMenuCSV()" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-700);font-size:11px;padding:5px 10px;border-radius:6px;white-space:nowrap;"><i class="fa-solid fa-file-csv"></i> Export CSV</button>
+                </div>
+            </div>
+
+            <!-- ─── PANEL SINKRON MITRA ─── -->
+            <div id="mitra-sync-panel" style="display:none;padding:12px 18px;background:linear-gradient(90deg,#fffbeb,#fef3c7);border-bottom:1.5px solid var(--amber-200);">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:36px;height:36px;background:var(--amber-500);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fa-solid fa-handshake" style="color:#fff;font-size:15px;"></i>
+                        </div>
+                        <div>
+                            <div style="font-size:12px;font-weight:800;color:#92400e;">Sinkronisasi Menu Mitra</div>
+                            <div style="font-size:10px;color:#b45309;margin-top:1px;">
+                                Perubahan stok &amp; status yang disimpan di sini langsung terbaca di Portal Mitra secara <strong>real-time</strong>.
+                                <span id="mitra-sync-count" style="font-weight:800;color:#92400e;"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <div id="mitra-sync-status" style="font-size:10px;font-weight:700;color:#b45309;display:none;align-items:center;gap:5px;">
+                            <i class="fa-solid fa-circle-check" style="color:var(--green-600);"></i>
+                            <span id="mitra-sync-status-text"></span>
+                        </div>
+                        <button onclick="sinkronSemuaMitra()" class="btn btn-sm" style="background:var(--amber-500);color:#fff;font-size:11px;padding:7px 14px;border-radius:8px;white-space:nowrap;box-shadow:0 2px 8px rgba(245,158,11,.3);">
+                            <i class="fa-solid fa-rotate"></i> Sinkron Semua Mitra
+                        </button>
+                        <button onclick="filterMenuMitraOnly()" id="btn-tampil-semua" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-600);font-size:11px;padding:7px 12px;border-radius:8px;white-space:nowrap;">
+                            <i class="fa-solid fa-list"></i> Tampilkan Semua
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -2659,6 +2859,9 @@
     <div class="card">
         <div class="card-header">
             <span class="card-title"><i class="fa-solid fa-handshake" style="color:var(--green-600);"></i> Stok Masuk Mitra — Input Retur</span>
+            <button onclick="bukaModalAdminInputStok()" class="btn btn-sm" style="background:var(--amber-100);color:var(--amber-700);border:1px solid var(--amber-300);font-size:11px;padding:6px 12px;">
+                <i class="fa-solid fa-pen-to-square"></i> Input Stok Mitra
+            </button>
         </div>
         <div id="kons-loading" class="empty-state hidden">
             <div class="spinner" style="margin:0 auto;"></div>
@@ -2666,7 +2869,10 @@
         </div>
         <div id="kons-empty" class="empty-state hidden">
             <i class="fa-solid fa-clipboard-question"></i>
-            <p>Belum ada data konsinyasi untuk tanggal ini.<br>Minta mitra untuk input stok terlebih dahulu.</p>
+            <p>Belum ada data konsinyasi untuk tanggal ini.</p>
+            <button onclick="bukaModalAdminInputStok()" class="btn btn-sm btn-green-sm" style="margin-top:12px;font-size:12px;padding:9px 18px;">
+                <i class="fa-solid fa-pen-to-square"></i> Input Stok untuk Mitra
+            </button>
         </div>
         <div id="kons-list" style="display:none;">
             <div id="kons-cards" style="padding:14px;display:flex;flex-direction:column;gap:14px;"></div>
@@ -3058,6 +3264,10 @@
             <div>
                 <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;">Panel Admin</div>
                 <div style="font-size:16px;font-weight:800;color:#fff;"><i class="fa-solid fa-user-shield" style="font-size:13px;margin-right:6px;color:var(--amber-400);"></i>Warunk Arsi Admin</div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.55);margin-top:4px;display:flex;align-items:center;gap:5px;">
+                    <i class="fa-brands fa-whatsapp" style="color:#25d366;font-size:12px;"></i>
+                    <span id="akun-info-wa">—</span>
+                </div>
             </div>
             <button onclick="tutupMenuAkunAdmin()" style="background:rgba(255,255,255,0.15);border:none;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;cursor:pointer;">
                 <i class="fa-solid fa-xmark"></i>
@@ -3076,9 +3286,128 @@
                 <span id="badge-chat-akun" style="display:none;background:var(--red-600);color:#fff;font-size:9px;font-weight:800;min-width:20px;height:20px;border-radius:10px;display:none;align-items:center;justify-content:center;font-family:var(--font-mono);padding:0 5px;flex-shrink:0;"></span>
                 <i class="fa-solid fa-chevron-right" style="color:var(--gray-400);font-size:11px;flex-shrink:0;"></i>
             </button>
+            <!-- Setting Login -->
+            <button onclick="bukaSetting()" style="width:100%;display:flex;align-items:center;gap:12px;background:#fafafa;border:1.5px solid var(--gray-200);border-radius:12px;padding:14px 16px;cursor:pointer;transition:background .15s;text-align:left;" onmouseover="this.style.background='var(--gray-100)'" onmouseout="this.style.background='#fafafa'">
+                <div style="width:40px;height:40px;border-radius:10px;background:var(--gray-700);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class="fa-solid fa-key" style="color:#fff;font-size:15px;"></i>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;font-weight:800;color:var(--gray-800);">Setting Login</div>
+                    <div style="font-size:11px;color:var(--gray-500);margin-top:1px;">Ubah nomor WhatsApp &amp; password</div>
+                </div>
+                <i class="fa-solid fa-chevron-right" style="color:var(--gray-400);font-size:11px;flex-shrink:0;"></i>
+            </button>
+
+            <!-- Logout -->
+            <button onclick="doLogout()" style="width:100%;display:flex;align-items:center;gap:12px;background:var(--red-100);border:1.5px solid #fecaca;border-radius:12px;padding:14px 16px;cursor:pointer;transition:background .15s;text-align:left;" onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='var(--red-100)'">
+                <div style="width:40px;height:40px;border-radius:10px;background:var(--red-600);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class="fa-solid fa-right-from-bracket" style="color:#fff;font-size:15px;"></i>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;font-weight:800;color:var(--red-600);">Logout</div>
+                    <div style="font-size:11px;color:var(--gray-500);margin-top:1px;">Keluar dari sistem kasir</div>
+                </div>
+                <i class="fa-solid fa-chevron-right" style="color:var(--gray-400);font-size:11px;flex-shrink:0;"></i>
+            </button>
+
             <!-- Info Version -->
             <div style="text-align:center;padding:8px 0 4px;font-size:10px;color:var(--gray-400);">
                 Warunk Arsi POS &nbsp;•&nbsp; Admin Panel v2.0
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── MODAL SETTING LOGIN ─── -->
+<div id="modal-setting-login" class="modal-overlay" style="z-index:10000;">
+    <div style="background:#fff;border-radius:20px;width:100%;max-width:440px;margin:20px;box-shadow:0 20px 60px rgba(0,0,0,0.25);overflow:hidden;animation:loginFadeIn .3s ease;">
+        <!-- Header -->
+        <div style="background:linear-gradient(135deg,#1f2937,#374151);padding:20px 20px 16px;display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px;">Keamanan Akun</div>
+                <div style="font-size:16px;font-weight:800;color:#fff;"><i class="fa-solid fa-key" style="font-size:13px;margin-right:6px;color:#fbbf24;"></i>Setting Login</div>
+            </div>
+            <button onclick="tutupSetting()" style="background:rgba(255,255,255,0.15);border:none;border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;cursor:pointer;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Body -->
+        <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+
+            <!-- Alert info -->
+            <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 14px;font-size:11px;color:#92400e;display:flex;align-items:flex-start;gap:8px;">
+                <i class="fa-solid fa-circle-info" style="margin-top:1px;flex-shrink:0;color:#d97706;"></i>
+                <span>Perubahan disimpan di browser ini saja. Catat kredensial baru Anda agar tidak lupa.</span>
+            </div>
+
+            <!-- Nomor WA baru -->
+            <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;letter-spacing:.3px;">
+                    <i class="fa-brands fa-whatsapp" style="color:#25d366;margin-right:4px;"></i>Nomor WhatsApp Baru
+                </label>
+                <input type="tel" id="setting-wa" class="form-input" placeholder="Contoh: 6285175150408" style="font-size:13px;">
+                <div style="font-size:10px;color:var(--gray-400);margin-top:4px;">Kosongkan jika tidak ingin mengubah nomor.</div>
+            </div>
+
+            <!-- Divider -->
+            <div style="border-top:1px solid var(--gray-100);"></div>
+
+            <!-- Password lama (verifikasi) -->
+            <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;letter-spacing:.3px;">
+                    <i class="fa-solid fa-lock" style="color:var(--gray-500);margin-right:4px;"></i>Password Saat Ini <span style="color:var(--red-600);">*</span>
+                </label>
+                <div style="position:relative;">
+                    <input type="password" id="setting-pw-lama" class="form-input" placeholder="Wajib diisi untuk konfirmasi" style="font-size:13px;padding-right:36px;">
+                    <button type="button" onclick="toggleSettingPw('setting-pw-lama','icon-lama')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:13px;">
+                        <i id="icon-lama" class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Password baru -->
+            <div>
+                <label style="display:block;font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;letter-spacing:.3px;">
+                    <i class="fa-solid fa-lock-open" style="color:var(--gray-500);margin-right:4px;"></i>Password Baru
+                </label>
+                <div style="position:relative;">
+                    <input type="password" id="setting-pw-baru" class="form-input" placeholder="Kosongkan jika tidak ingin ubah" style="font-size:13px;padding-right:36px;">
+                    <button type="button" onclick="toggleSettingPw('setting-pw-baru','icon-baru')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:13px;">
+                        <i id="icon-baru" class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Konfirmasi password baru -->
+            <div id="setting-konfirmasi-wrap" style="display:none;">
+                <label style="display:block;font-size:11px;font-weight:700;color:#374151;margin-bottom:6px;letter-spacing:.3px;">
+                    <i class="fa-solid fa-check-double" style="color:var(--gray-500);margin-right:4px;"></i>Konfirmasi Password Baru
+                </label>
+                <div style="position:relative;">
+                    <input type="password" id="setting-pw-konfirm" class="form-input" placeholder="Ulangi password baru" style="font-size:13px;padding-right:36px;">
+                    <button type="button" onclick="toggleSettingPw('setting-pw-konfirm','icon-konfirm')" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--gray-400);font-size:13px;">
+                        <i id="icon-konfirm" class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Error / Success -->
+            <div id="setting-error" style="display:none;background:var(--red-100);border:1px solid #fecaca;border-radius:8px;padding:9px 12px;font-size:12px;font-weight:600;color:var(--red-600);align-items:center;gap:7px;">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <span id="setting-error-text"></span>
+            </div>
+            <div id="setting-success" style="display:none;background:var(--green-100);border:1px solid #bbf7d0;border-radius:8px;padding:9px 12px;font-size:12px;font-weight:600;color:var(--green-700);align-items:center;gap:7px;">
+                <i class="fa-solid fa-circle-check"></i>
+                <span id="setting-success-text"></span>
+            </div>
+
+            <!-- Buttons -->
+            <div style="display:flex;gap:10px;margin-top:4px;">
+                <button onclick="tutupSetting()" class="btn btn-ghost" style="flex:1;padding:11px;">Batal</button>
+                <button onclick="simpanSetting()" class="btn btn-primary" style="flex:2;padding:11px;font-size:13px;">
+                    <i class="fa-solid fa-floppy-disk"></i> Simpan Perubahan
+                </button>
             </div>
         </div>
     </div>
@@ -3415,6 +3744,8 @@
             }
             fetchKonsinyasiList();
             fetchKonsinyasiRiwayat();
+            // Hapus dot notifikasi edit request saat panel konsinyasi dibuka
+            document.querySelectorAll('.edit-req-dot').forEach(d => d.remove());
         }
     }
 
@@ -3836,6 +4167,14 @@
         const tbody = document.getElementById('kasir-menu-table');
         updateJamOpsBanner();
         const jamBuka = isJamOperasional();
+
+        // Update panel sinkron mitra
+        const mitraList = menusList.filter(m => m.mitra_wa);
+        const syncPanel = document.getElementById('mitra-sync-panel');
+        const syncCount = document.getElementById('mitra-sync-count');
+        if (syncPanel) syncPanel.style.display = mitraList.length ? 'block' : 'none';
+        if (syncCount) syncCount.textContent = mitraList.length ? `· ${mitraList.length} produk mitra ditemukan` : '';
+
         if (!menusList.length) {
             tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--gray-400);">Tidak ada menu ditemukan.</td></tr>';
             renderHppSummary([]);
@@ -3866,7 +4205,7 @@
                    ${!jamBuka ? `<div class="stok-preorder-badge" style="margin-top:3px;"><i class="fa-solid fa-infinity" style="font-size:8px;"></i> Pre-Order</div>` : ''}`;
 
             return `
-            <tr>
+            <tr style="${m.mitra_wa ? 'background:linear-gradient(90deg,#fffbeb 0,#fff 80px);border-left:3px solid var(--amber-400);' : ''}">
                 <td>
                     <div style="display:flex;align-items:center;gap:10px;">
                         <img src="${m.gambar_url || ''}" onerror="this.style.display='none'" style="width:30px;height:30px;object-fit:cover;border-radius:6px;border:1px solid var(--gray-200);flex-shrink:0;">
@@ -3904,6 +4243,7 @@
                     <div style="display:flex;gap:3px;justify-content:center;flex-direction:column;align-items:center;">
                         <button onclick="openEditMenuModal('${m.id}')" class="btn btn-sm" style="font-size:10px;padding:4px 7px;white-space:nowrap;background:#dbeafe;color:#1d4ed8;border-radius:6px;"><i class="fa-solid fa-pen"></i> Edit</button>
                         <button onclick="updateSingleMenu('${m.id}')" class="btn btn-sm btn-green-sm" style="font-size:10px;padding:4px 7px;white-space:nowrap;"><i class="fa-solid fa-floppy-disk"></i> Simpan</button>
+                        ${m.mitra_wa ? `<button onclick="sinkronSatuMitra('${m.id}')" class="btn btn-sm" id="btn-mitra-sync-${m.id}" style="font-size:10px;padding:4px 7px;white-space:nowrap;background:var(--amber-100);color:var(--amber-700);border-radius:6px;"><i class="fa-solid fa-rotate"></i> Sinkron</button>` : ''}
                         <button onclick="deleteMenu('${m.id}')" class="btn btn-sm btn-danger-sm" style="font-size:10px;padding:4px 7px;"><i class="fa-solid fa-trash"></i> Hapus</button>
                     </div>
                 </td>
@@ -3997,6 +4337,101 @@
             m.kategori.toLowerCase().includes(keyword)
         );
         renderMenuTable(filtered);
+    }
+
+    /* ── Filter hanya menu mitra ── */
+    let _showingMitraOnly = false;
+    function filterMenuMitraOnly() {
+        _showingMitraOnly = !_showingMitraOnly;
+        const btn = document.getElementById('btn-filter-mitra');
+        if (_showingMitraOnly) {
+            const mitraMenu = currentMenusCache.filter(m => m.mitra_wa);
+            renderMenuTable(mitraMenu);
+            if (btn) { btn.style.background = 'var(--amber-500)'; btn.style.color = '#fff'; btn.innerHTML = '<i class="fa-solid fa-handshake"></i> Semua Menu'; }
+        } else {
+            renderMenuTable(currentMenusCache);
+            if (btn) { btn.style.background = 'var(--amber-50)'; btn.style.color = 'var(--amber-600)'; btn.innerHTML = '<i class="fa-solid fa-handshake"></i> Tampilkan Mitra'; }
+        }
+    }
+
+    /* ── Sinkron SATU menu mitra ke Supabase (push stok + status dari input di baris itu) ── */
+    async function sinkronSatuMitra(id) {
+        const m = currentMenusCache.find(x => x.id === id);
+        if (!m || !m.mitra_wa) return;
+
+        const stok        = parseInt(document.getElementById(`stok-${id}`)?.value) || 0;
+        const is_tersedia = document.getElementById(`tersedia-${id}`)?.value === 'true';
+        const harga_normal    = parseInt(document.getElementById(`price-${id}`)?.value) || m.harga_normal;
+        const harga_flash_sale = parseInt(document.getElementById(`fs-price-${id}`)?.value) || m.harga_flash_sale || 0;
+        const is_flash_sale   = parseInt(document.getElementById(`status-fs-${id}`)?.value) || 0;
+
+        const btn = document.getElementById(`btn-mitra-sync-${id}`);
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; }
+
+        const { error } = await _supabase.from('menu').update({
+            stok, is_tersedia, harga_normal, harga_flash_sale, is_flash_sale
+        }).eq('id', id);
+
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Sinkron'; }
+
+        if (error) {
+            showToast(`Gagal sinkron ${m.nama}!`, 'amber');
+        } else {
+            // update cache lokal
+            const idx = currentMenusCache.findIndex(x => x.id === id);
+            if (idx > -1) Object.assign(currentMenusCache[idx], { stok, is_tersedia, harga_normal, harga_flash_sale, is_flash_sale });
+            showToast(`✅ ${m.nama} → Portal Mitra (${m.mitra_nama || m.mitra_wa}) tersinkron!`);
+            _tampilStatusSinkron(`${m.nama} berhasil dikirim ke Portal Mitra`);
+        }
+    }
+
+    /* ── Sinkron SEMUA menu mitra sekaligus ── */
+    async function sinkronSemuaMitra() {
+        const mitraMenu = currentMenusCache.filter(m => m.mitra_wa);
+        if (!mitraMenu.length) { showToast('Tidak ada menu mitra ditemukan.', 'amber'); return; }
+
+        if (!confirm(`Sinkronkan ${mitraMenu.length} menu mitra ke Portal Mitra?\n\nStok, status (Ready/Habis), harga, dan flash sale yang ditampilkan di tabel ini akan dikirim ke Supabase dan langsung terbaca oleh mitra.`)) return;
+
+        showToast(`⏳ Menyinkronkan ${mitraMenu.length} menu mitra...`, 'amber');
+
+        let sukses = 0, gagal = 0;
+        for (const m of mitraMenu) {
+            const stok         = parseInt(document.getElementById(`stok-${m.id}`)?.value ?? m.stok) || 0;
+            const is_tersedia  = (document.getElementById(`tersedia-${m.id}`)?.value ?? (m.is_tersedia ? 'true' : 'false')) === 'true';
+            const harga_normal      = parseInt(document.getElementById(`price-${m.id}`)?.value) || m.harga_normal;
+            const harga_flash_sale  = parseInt(document.getElementById(`fs-price-${m.id}`)?.value) || m.harga_flash_sale || 0;
+            const is_flash_sale     = parseInt(document.getElementById(`status-fs-${m.id}`)?.value) || m.is_flash_sale || 0;
+
+            const { error } = await _supabase.from('menu').update({
+                stok, is_tersedia, harga_normal, harga_flash_sale, is_flash_sale
+            }).eq('id', m.id);
+
+            if (error) { gagal++; }
+            else {
+                sukses++;
+                const idx = currentMenusCache.findIndex(x => x.id === m.id);
+                if (idx > -1) Object.assign(currentMenusCache[idx], { stok, is_tersedia, harga_normal, harga_flash_sale, is_flash_sale });
+            }
+        }
+
+        const msg = gagal === 0
+            ? `✅ ${sukses} menu mitra berhasil disinkronkan ke Portal Mitra!`
+            : `⚠ ${sukses} sukses, ${gagal} gagal. Coba ulangi.`;
+        showToast(msg, gagal > 0 ? 'amber' : 'green');
+        _tampilStatusSinkron(gagal === 0 ? `${sukses} menu tersinkron ke Portal Mitra` : `${sukses} sukses, ${gagal} gagal`);
+        renderMenuTable(currentMenusCache);
+    }
+
+    /* ── Tampilkan status sinkron di panel ── */
+    function _tampilStatusSinkron(teks) {
+        const el   = document.getElementById('mitra-sync-status');
+        const txt  = document.getElementById('mitra-sync-status-text');
+        if (!el || !txt) return;
+        const now  = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        txt.textContent = teks + ' · ' + now;
+        el.style.display = 'flex';
+        clearTimeout(el._timer);
+        el._timer = setTimeout(() => { el.style.display = 'none'; }, 8000);
     }
 
     async function updateSingleMenu(id) {
@@ -6223,6 +6658,10 @@
                 ? `<span style="background:var(--green-100);color:var(--green-700);font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;"><i class="fa-solid fa-circle-check"></i> Retur Selesai</span>`
                 : `<span style="background:var(--amber-100);color:var(--amber-600);font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;"><i class="fa-solid fa-clock"></i> Menunggu Retur</span>`;
 
+            const adminInputBadge = k.diinput_admin
+                ? `<span style="background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;"><i class="fa-solid fa-user-shield"></i> Diinput Admin</span>`
+                : '';
+
             return `
             <div style="background:var(--white);border:1.5px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden;" id="kons-block-${k.id}">
                 <!-- Header Mitra -->
@@ -6233,6 +6672,7 @@
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                         ${statusBadge}
+                        ${adminInputBadge}
                         <div id="kons-total-${k.id}" style="font-family:var(--font-mono);font-size:13px;font-weight:800;color:var(--green-700);">
                             Rp ${(k.total_bayar||0).toLocaleString('id-ID')}
                         </div>
@@ -6964,6 +7404,8 @@
         setupAdminChatBadgeListener();
         // Sinkron realtime status menu (Flash Sale, stok, dll) dari Portal Mitra
         setupMenuRealtimeSync();
+        // Terima notifikasi realtime saat mitra minta edit/koreksi stok
+        setupEditRequestNotif();
         // Auto-refresh kasir grid setiap menit agar waktu flash sale tetap akurat
         setInterval(() => {
             const kasirPanel = document.getElementById('panel-kasir');
@@ -6992,6 +7434,645 @@
             })
             .subscribe();
     }
+
+    /* ── Realtime: terima notifikasi permintaan edit stok dari mitra ── */
+    let _editRequestChannel = null;
+    function setupEditRequestNotif() {
+        if (_editRequestChannel) return;
+        _editRequestChannel = _supabase.channel('admin-edit-request-notif')
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'konsinyasi_stok'
+            }, (payload) => {
+                const row = payload.new;
+                if (!row) return;
+                // Hanya proses jika edit_request baru di-set true
+                const wasRequest = payload.old?.edit_request;
+                if (!row.edit_request || wasRequest === true) return;
+
+                const namaMitra = row.mitra_nama || row.mitra_wa || 'Mitra';
+                const tgl = row.tanggal || '';
+
+                // Toast notifikasi di POS
+                showToast(`✏️ ${namaMitra} meminta koreksi stok (${tgl}) — cek panel Konsinyasi!`, 'amber');
+
+                // Tandai badge di tab/nav konsinyasi jika ada
+                _tandaiBadgeKonsinyasiEditReq(namaMitra);
+
+                // Refresh panel konsinyasi jika sedang terbuka
+                const panelKons = document.getElementById('panel-konsinyasi');
+                if (panelKons && !panelKons.classList.contains('hidden')) {
+                    if (typeof loadKonsinyasiAdmin === 'function') loadKonsinyasiAdmin();
+                }
+            })
+            .subscribe();
+    }
+
+    /* Tampilkan dot/badge notifikasi pada tombol Konsinyasi di nav */
+    function _tandaiBadgeKonsinyasiEditReq(namaMitra) {
+        // Cari tombol konsinyasi di topnav (teks mengandung "Konsinyasi")
+        const konsBtn = [...document.querySelectorAll('.nav-btn, .tab-btn, button')]
+            .find(b => b.textContent.includes('Konsinyasi') && !b.closest('#panel-konsinyasi'));
+        if (!konsBtn) return;
+
+        // Tambahkan dot merah jika belum ada
+        if (!konsBtn.querySelector('.edit-req-dot')) {
+            const dot = document.createElement('span');
+            dot.className = 'edit-req-dot';
+            dot.title = `${namaMitra} minta koreksi stok`;
+            dot.style.cssText = 'display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:50%;margin-left:5px;vertical-align:middle;animation:pulse-anim 1s infinite;flex-shrink:0;';
+            konsBtn.appendChild(dot);
+        }
+    }
 </script>
+
+<!-- ─── LOGIN & SETTING SCRIPT ─── -->
+<script>
+(function() {
+    /* ══════════════════════════════════════════════════════════════
+       KONSTANTA & STORAGE KEYS
+    ══════════════════════════════════════════════════════════════ */
+    const DEFAULT_WA   = '6285175150408';
+    const DEFAULT_PW   = 'Bismillah@1m';
+    const CRED_KEY     = 'pos_arsi_cred';   // localStorage  → {wa, pw}
+    const SESSION_KEY  = 'pos_arsi_auth';   // sessionStorage → 'ok'
+
+    /* ── Baca / tulis kredensial ── */
+    function getCred() {
+        try {
+            const raw = localStorage.getItem(CRED_KEY);
+            if (raw) {
+                const obj = JSON.parse(raw);
+                if (obj && obj.wa && obj.pw) return obj;
+            }
+        } catch(e) {}
+        return { wa: DEFAULT_WA, pw: DEFAULT_PW };
+    }
+
+    function saveCred(wa, pw) {
+        try { localStorage.setItem(CRED_KEY, JSON.stringify({ wa, pw })); } catch(e) {}
+    }
+
+    function isLoggedIn() {
+        try { return sessionStorage.getItem(SESSION_KEY) === 'ok'; } catch(e) { return false; }
+    }
+
+    function setSession() {
+        try { sessionStorage.setItem(SESSION_KEY, 'ok'); } catch(e) {}
+    }
+
+    function clearSession() {
+        try { sessionStorage.removeItem(SESSION_KEY); } catch(e) {}
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       LOGIN
+    ══════════════════════════════════════════════════════════════ */
+    function showApp() {
+        document.getElementById('login-overlay').style.display = 'none';
+        document.getElementById('main-app').style.display = '';
+        // tampilkan nomor WA aktif di topbar akun jika ada elemen-nya
+        _syncAkunDisplay();
+    }
+
+    function showLogin() {
+        document.getElementById('login-overlay').style.display = 'flex';
+        document.getElementById('main-app').style.display = 'none';
+        document.getElementById('login-wa').value = '';
+        document.getElementById('login-pw').value = '';
+        hideLoginError();
+        setTimeout(() => { const el = document.getElementById('login-wa'); if(el) el.focus(); }, 120);
+    }
+
+    function showLoginError(msg) {
+        const errEl   = document.getElementById('login-error');
+        const errText = document.getElementById('login-error-text');
+        errText.textContent = msg || 'Nomor WhatsApp atau password salah.';
+        errEl.classList.add('show');
+        const box = document.getElementById('login-box');
+        box.classList.remove('shake');
+        void box.offsetWidth;
+        box.classList.add('shake');
+        setTimeout(() => box.classList.remove('shake'), 500);
+    }
+
+    function hideLoginError() {
+        document.getElementById('login-error').classList.remove('show');
+    }
+
+    window.doLogin = function() {
+        const wa = document.getElementById('login-wa').value.trim().replace(/\s+/g,'');
+        const pw = document.getElementById('login-pw').value;
+        hideLoginError();
+        if (!wa) { showLoginError('Nomor WhatsApp wajib diisi.'); return; }
+        if (!pw) { showLoginError('Password wajib diisi.'); return; }
+        const cred = getCred();
+        if (wa === cred.wa && pw === cred.pw) {
+            setSession();
+            showApp();
+        } else {
+            showLoginError('Nomor WhatsApp atau password salah.');
+            document.getElementById('login-pw').value = '';
+            document.getElementById('login-pw').focus();
+        }
+    };
+
+    window.toggleLoginPw = function() {
+        const inp  = document.getElementById('login-pw');
+        const icon = document.getElementById('login-eye-icon');
+        if (inp.type === 'password') { inp.type = 'text';     icon.className = 'fa-solid fa-eye-slash'; }
+        else                         { inp.type = 'password'; icon.className = 'fa-solid fa-eye'; }
+    };
+
+    /* ══════════════════════════════════════════════════════════════
+       LOGOUT
+    ══════════════════════════════════════════════════════════════ */
+    window.doLogout = function() {
+        if (!confirm('Yakin ingin keluar dari sistem kasir?')) return;
+        clearSession();
+        // Tutup semua modal yang mungkin terbuka
+        ['modal-akun-admin','modal-setting-login'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('open');
+        });
+        showLogin();
+    };
+
+    /* ══════════════════════════════════════════════════════════════
+       SETTING LOGIN — BUKA / TUTUP
+    ══════════════════════════════════════════════════════════════ */
+    window.bukaSetting = function() {
+        // Tutup menu akun admin dulu
+        const menuAkun = document.getElementById('modal-akun-admin');
+        if (menuAkun) menuAkun.classList.remove('open');
+
+        // Reset semua field & pesan
+        _resetSettingForm();
+
+        // Tampilkan nomor WA aktif sebagai placeholder
+        const cred = getCred();
+        const waField = document.getElementById('setting-wa');
+        if (waField) waField.placeholder = 'Aktif: ' + cred.wa;
+
+        const modal = document.getElementById('modal-setting-login');
+        if (modal) modal.classList.add('open');
+    };
+
+    window.tutupSetting = function() {
+        const modal = document.getElementById('modal-setting-login');
+        if (modal) modal.classList.remove('open');
+    };
+
+    function _resetSettingForm() {
+        ['setting-wa','setting-pw-lama','setting-pw-baru','setting-pw-konfirm'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        // sembunyikan konfirmasi password baru
+        const konfWrap = document.getElementById('setting-konfirmasi-wrap');
+        if (konfWrap) konfWrap.style.display = 'none';
+        // reset ikon mata
+        ['icon-lama','icon-baru','icon-konfirm'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.className = 'fa-solid fa-eye';
+        });
+        ['setting-pw-lama','setting-pw-baru','setting-pw-konfirm'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.type = 'password';
+        });
+        _setSettingMsg('error', '');
+        _setSettingMsg('success', '');
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SETTING LOGIN — SIMPAN
+    ══════════════════════════════════════════════════════════════ */
+    window.simpanSetting = function() {
+        _setSettingMsg('error', '');
+        _setSettingMsg('success', '');
+
+        const waInput    = (document.getElementById('setting-wa')?.value || '').trim().replace(/\s+/g,'');
+        const pwLama     = document.getElementById('setting-pw-lama')?.value || '';
+        const pwBaru     = document.getElementById('setting-pw-baru')?.value || '';
+        const pwKonfirm  = document.getElementById('setting-pw-konfirm')?.value || '';
+
+        // Wajib: password saat ini
+        if (!pwLama) {
+            _setSettingMsg('error', 'Password saat ini wajib diisi untuk konfirmasi.');
+            document.getElementById('setting-pw-lama')?.focus();
+            return;
+        }
+
+        const cred = getCred();
+
+        // Verifikasi password lama
+        if (pwLama !== cred.pw) {
+            _setSettingMsg('error', 'Password saat ini salah. Coba lagi.');
+            document.getElementById('setting-pw-lama').value = '';
+            document.getElementById('setting-pw-lama')?.focus();
+            return;
+        }
+
+        // Tidak ada perubahan apapun?
+        if (!waInput && !pwBaru) {
+            _setSettingMsg('error', 'Tidak ada perubahan. Isi nomor WA baru atau password baru.');
+            return;
+        }
+
+        // Validasi WA baru jika diisi
+        if (waInput) {
+            if (!/^\d{10,15}$/.test(waInput)) {
+                _setSettingMsg('error', 'Nomor WhatsApp tidak valid. Gunakan format: 628xxxxxxxxx (10–15 digit angka).');
+                document.getElementById('setting-wa')?.focus();
+                return;
+            }
+        }
+
+        // Validasi password baru jika diisi
+        if (pwBaru) {
+            if (pwBaru.length < 8) {
+                _setSettingMsg('error', 'Password baru minimal 8 karakter.');
+                document.getElementById('setting-pw-baru')?.focus();
+                return;
+            }
+            if (pwBaru !== pwKonfirm) {
+                _setSettingMsg('error', 'Konfirmasi password baru tidak cocok.');
+                document.getElementById('setting-pw-konfirm')?.focus();
+                return;
+            }
+        }
+
+        // Simpan
+        const newWa = waInput || cred.wa;
+        const newPw = pwBaru  || cred.pw;
+        saveCred(newWa, newPw);
+
+        // Tampilkan sukses
+        let msg = 'Perubahan berhasil disimpan!';
+        const changes = [];
+        if (waInput)  changes.push('Nomor WA → ' + newWa);
+        if (pwBaru)   changes.push('Password baru aktif');
+        if (changes.length) msg += ' (' + changes.join(', ') + ')';
+        _setSettingMsg('success', msg);
+
+        // Update display akun
+        _syncAkunDisplay();
+
+        // Reset field sensitif
+        ['setting-pw-lama','setting-pw-baru','setting-pw-konfirm'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+
+        // Auto-tutup setelah 2 detik
+        setTimeout(() => {
+            tutupSetting();
+        }, 2000);
+    };
+
+    /* ══════════════════════════════════════════════════════════════
+       HELPER — PESAN ERROR / SUKSES DI SETTING
+    ══════════════════════════════════════════════════════════════ */
+    function _setSettingMsg(type, msg) {
+        const el   = document.getElementById('setting-' + type);
+        const text = document.getElementById('setting-' + type + '-text');
+        if (!el || !text) return;
+        if (msg) {
+            text.textContent = msg;
+            el.style.display = 'flex';
+        } else {
+            el.style.display = 'none';
+            text.textContent = '';
+        }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       TOGGLE SHOW/HIDE PASSWORD DI SETTING
+    ══════════════════════════════════════════════════════════════ */
+    window.toggleSettingPw = function(inputId, iconId) {
+        const inp  = document.getElementById(inputId);
+        const icon = document.getElementById(iconId);
+        if (!inp || !icon) return;
+        if (inp.type === 'password') { inp.type = 'text';     icon.className = 'fa-solid fa-eye-slash'; }
+        else                         { inp.type = 'password'; icon.className = 'fa-solid fa-eye'; }
+    };
+
+    /* ══════════════════════════════════════════════════════════════
+       AUTO-SHOW KONFIRMASI PASSWORD BARU
+    ══════════════════════════════════════════════════════════════ */
+    document.addEventListener('DOMContentLoaded', function() {
+        const pwBaruEl = document.getElementById('setting-pw-baru');
+        const konfWrap = document.getElementById('setting-konfirmasi-wrap');
+        if (pwBaruEl && konfWrap) {
+            pwBaruEl.addEventListener('input', function() {
+                konfWrap.style.display = this.value.length > 0 ? 'block' : 'none';
+            });
+        }
+        // Autofocus WA di login
+        const waEl = document.getElementById('login-wa');
+        if (waEl && !isLoggedIn()) waEl.focus();
+    });
+
+    /* ══════════════════════════════════════════════════════════════
+       SYNC TAMPILAN AKUN (nomor WA aktif di panel akun)
+    ══════════════════════════════════════════════════════════════ */
+    function _syncAkunDisplay() {
+        const cred = getCred();
+        // Update info di menu akun admin jika ada elemen info-wa
+        const infoEl = document.getElementById('akun-info-wa');
+        if (infoEl) infoEl.textContent = '+' + cred.wa;
+        const waField = document.getElementById('setting-wa');
+        if (waField) waField.placeholder = 'Aktif: ' + cred.wa;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       INIT — CEK SESSION SAAT HALAMAN DIMUAT
+    ══════════════════════════════════════════════════════════════ */
+    if (isLoggedIn()) {
+        showApp();
+    } else {
+        document.getElementById('login-overlay').style.display = 'flex';
+        document.getElementById('main-app').style.display = 'none';
+        setTimeout(() => { const el = document.getElementById('login-wa'); if(el) el.focus(); }, 120);
+    }
+
+
+    /* ══════════════════════════════════════════════════════════════
+       ADMIN INPUT STOK UNTUK MITRA
+       Digunakan ketika mitra belum sempat input stok sendiri.
+       Admin input dari panel POS → di sisi mitra field auto-terisi
+       dan dikunci (sama seperti saat mitra input mandiri).
+    ══════════════════════════════════════════════════════════════ */
+    let _adminStokProdukList  = []; // produk mitra yang dipilih
+    let _adminStokMitraList   = []; // semua mitra unik
+
+    async function bukaModalAdminInputStok() {
+        const modal = document.getElementById('modal-admin-input-stok');
+        if (!modal) return;
+
+        // Ambil tanggal yang sedang aktif di filter konsinyasi
+        const tgl = document.getElementById('admin-kons-tanggal')?.value || new Date().toISOString().slice(0,10);
+        const tglLabel = new Date(tgl + 'T00:00:00').toLocaleDateString('id-ID', {weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+        document.getElementById('admin-stok-tgl-label').textContent = tglLabel;
+        document.getElementById('admin-stok-tgl-info').style.display = 'block';
+
+        // Reset UI
+        document.getElementById('admin-stok-produk-wrap').style.display = 'none';
+        document.getElementById('admin-stok-sudah-ada').style.display = 'none';
+        document.getElementById('admin-stok-sql-warning').style.display = 'none';
+        document.getElementById('admin-stok-footer').style.display = 'none';
+        document.getElementById('admin-stok-loading').style.display = 'none';
+
+        modal.classList.add('open');
+
+        // Cek apakah kolom diinput_admin sudah ada di DB
+        const { data: colCheck, error: colError } = await _supabase
+            .from('konsinyasi_stok')
+            .select('diinput_admin')
+            .limit(1);
+        if (colError && colError.message && colError.message.includes('diinput_admin')) {
+            // Kolom belum ada — tampilkan peringatan SQL
+            document.getElementById('admin-stok-sql-warning').style.display = 'block';
+            document.getElementById('admin-stok-mitra-select').innerHTML = '<option value="">— Selesaikan migrasi SQL dulu —</option>';
+            return;
+        }
+
+        // Ambil semua mitra unik dari tabel menu
+        const { data: mitraRows } = await _supabase
+            .from('menu')
+            .select('mitra_wa, mitra_nama')
+            .not('mitra_wa', 'is', null)
+            .order('mitra_nama', { ascending: true });
+
+        // Deduplicate by mitra_wa
+        const mitraMap = {};
+        (mitraRows || []).forEach(r => {
+            if (r.mitra_wa && !mitraMap[r.mitra_wa]) {
+                mitraMap[r.mitra_wa] = r.mitra_nama || r.mitra_wa;
+            }
+        });
+        _adminStokMitraList = Object.entries(mitraMap).map(([wa, nama]) => ({ wa, nama }));
+
+        const sel = document.getElementById('admin-stok-mitra-select');
+        sel.innerHTML = '<option value="">— Pilih mitra —</option>' +
+            _adminStokMitraList.map(m => `<option value="${m.wa}">${m.nama} (${m.wa})</option>`).join('');
+    }
+
+    function tutupModalAdminInputStok() {
+        const modal = document.getElementById('modal-admin-input-stok');
+        if (modal) modal.classList.remove('open');
+        _adminStokProdukList = [];
+    }
+
+    async function adminStokMitraChanged() {
+        const wa = document.getElementById('admin-stok-mitra-select').value;
+        if (!wa) {
+            document.getElementById('admin-stok-produk-wrap').style.display = 'none';
+            document.getElementById('admin-stok-sudah-ada').style.display = 'none';
+            document.getElementById('admin-stok-footer').style.display = 'none';
+            return;
+        }
+
+        const tgl = document.getElementById('admin-kons-tanggal')?.value || new Date().toISOString().slice(0,10);
+
+        // Cek apakah mitra sudah punya data stok hari ini
+        const { data: existingRec } = await _supabase
+            .from('konsinyasi_stok')
+            .select('id, status')
+            .eq('mitra_wa', wa)
+            .eq('tanggal', tgl)
+            .maybeSingle();
+
+        if (existingRec) {
+            document.getElementById('admin-stok-sudah-ada').style.display = 'block';
+            document.getElementById('admin-stok-produk-wrap').style.display = 'none';
+            document.getElementById('admin-stok-footer').style.display = 'none';
+            return;
+        }
+
+        document.getElementById('admin-stok-sudah-ada').style.display = 'none';
+        document.getElementById('admin-stok-loading').style.display = 'block';
+        document.getElementById('admin-stok-produk-wrap').style.display = 'none';
+        document.getElementById('admin-stok-footer').style.display = 'none';
+
+        // Ambil produk mitra
+        const { data: produk } = await _supabase
+            .from('menu')
+            .select('id, nama, harga_beli, gambar_url')
+            .eq('mitra_wa', wa)
+            .order('id', { ascending: true });
+
+        document.getElementById('admin-stok-loading').style.display = 'none';
+
+        if (!produk || produk.length === 0) {
+            document.getElementById('admin-stok-produk-wrap').style.display = 'none';
+            return;
+        }
+
+        _adminStokProdukList = produk;
+
+        // Render form input per produk
+        const listEl = document.getElementById('admin-stok-produk-list');
+        listEl.innerHTML = produk.map(p => `
+            <div style="display:flex;align-items:center;gap:10px;background:var(--white);border:1.5px solid var(--gray-200);border-radius:var(--radius);padding:10px 12px;">
+                <img src="${p.gambar_url || ''}" onerror="this.src='https://img.icons8.com/illustrations/kolor/64/fast-food.png'"
+                     style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--gray-100);">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:12px;font-weight:700;color:var(--gray-800);">${p.nama}</div>
+                    <div style="font-size:10px;color:var(--green-600);font-weight:700;">Rp ${(p.harga_beli||0).toLocaleString('id-ID')} / pcs</div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;">
+                    <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--gray-400);">Stok Masuk</div>
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        <button type="button" onclick="adjAdminStok('admin-stok-masuk-${p.id}', -1)"
+                            style="width:30px;height:30px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);cursor:pointer;font-size:16px;font-weight:800;color:var(--gray-600);display:flex;align-items:center;justify-content:center;">−</button>
+                        <input type="number" id="admin-stok-masuk-${p.id}" value="0" min="0" inputmode="numeric"
+                            style="width:56px;font-family:var(--font-mono);font-size:16px;font-weight:800;border:1.5px solid var(--gray-200);border-radius:8px;padding:5px 4px;outline:none;text-align:center;color:var(--gray-800);">
+                        <button type="button" onclick="adjAdminStok('admin-stok-masuk-${p.id}', 1)"
+                            style="width:30px;height:30px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);cursor:pointer;font-size:16px;font-weight:800;color:var(--gray-600);display:flex;align-items:center;justify-content:center;">+</button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        document.getElementById('admin-stok-produk-wrap').style.display = 'block';
+        document.getElementById('admin-stok-footer').style.display = 'flex';
+    }
+
+    function adjAdminStok(inputId, delta) {
+        const inp = document.getElementById(inputId);
+        if (!inp) return;
+        inp.value = Math.max(0, (parseInt(inp.value) || 0) + delta);
+    }
+
+    async function simpanAdminInputStok() {
+        const wa  = document.getElementById('admin-stok-mitra-select').value;
+        const tgl = document.getElementById('admin-kons-tanggal')?.value || new Date().toISOString().slice(0,10);
+        if (!wa || _adminStokProdukList.length === 0) return;
+
+        const mitraObj = _adminStokMitraList.find(m => m.wa === wa);
+        const mitraNama = mitraObj?.nama || wa;
+
+        const btn = document.getElementById('btn-admin-stok-simpan');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
+
+        let detail = [];
+        let totalMasuk = 0;
+
+        _adminStokProdukList.forEach(p => {
+            const masuk = parseInt(document.getElementById(`admin-stok-masuk-${p.id}`)?.value) || 0;
+            totalMasuk += masuk;
+            detail.push({
+                menu_id:     p.id,
+                nama:        p.nama,
+                harga_beli:  p.harga_beli || 0,
+                stok_masuk:  masuk,
+                retur:       0,
+                terjual:     masuk,
+                subtotal:    masuk * (p.harga_beli || 0),
+                is_verified: false
+            });
+        });
+
+        const payload = {
+            mitra_wa:       wa,
+            mitra_nama:     mitraNama,
+            tanggal:        tgl,
+            total_masuk:    totalMasuk,
+            total_retur:    0,
+            total_terjual:  totalMasuk,
+            total_bayar:    detail.reduce((s, d) => s + d.subtotal, 0),
+            detail:         detail,
+            status:         'submitted',
+            diinput_admin:  true,   // ← FLAG: stok diinput admin, bukan mitra
+            edit_unlocked:  false,
+            updated_at:     new Date().toISOString()
+        };
+
+        const { error } = await _supabase.from('konsinyasi_stok').insert([payload]);
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Stok Mitra';
+
+        if (error) {
+            showToast('Gagal menyimpan: ' + (error.message || ''), 'amber');
+            return;
+        }
+
+        showToast(`✅ Stok mitra ${mitraNama} berhasil diinput! Form mitra akan terkunci otomatis.`, 'green');
+        tutupModalAdminInputStok();
+        fetchKonsinyasiList();
+        fetchKonsinyasiRiwayat();
+    }
+
+    // Tutup modal saat klik overlay
+    document.getElementById('modal-admin-input-stok')?.addEventListener('click', function(e) {
+        if (e.target === this) tutupModalAdminInputStok();
+    });
+
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MODAL: ADMIN INPUT STOK UNTUK MITRA
+═══════════════════════════════════════════════════════════════ -->
+<div id="modal-admin-input-stok" class="modal-overlay" style="z-index:9000;">
+    <div class="modal-box" style="max-width:560px;width:95%;">
+        <div class="modal-header green" style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+                <div style="font-size:14px;font-weight:800;color:#fff;"><i class="fa-solid fa-pen-to-square"></i> Input Stok Mitra oleh Admin</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;" id="admin-stok-modal-subtitle">Pilih mitra lalu masukkan stok masuk hari ini</div>
+            </div>
+            <button onclick="tutupModalAdminInputStok()" class="modal-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:14px;max-height:70vh;overflow-y:auto;">
+            <!-- Pilih Mitra -->
+            <div id="admin-stok-step-mitra">
+                <label style="font-size:11px;font-weight:700;color:var(--gray-600);text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:6px;">Pilih Mitra</label>
+                <select id="admin-stok-mitra-select" class="form-input" onchange="adminStokMitraChanged()">
+                    <option value="">— Memuat daftar mitra... —</option>
+                </select>
+            </div>
+            <!-- Info tanggal -->
+            <div id="admin-stok-tgl-info" style="font-size:12px;color:var(--gray-500);display:none;">
+                <i class="fa-solid fa-calendar-day" style="color:var(--green-600);"></i>
+                Tanggal: <span id="admin-stok-tgl-label" style="font-weight:700;color:var(--gray-800);"></span>
+            </div>
+            <!-- Loading produk -->
+            <div id="admin-stok-loading" style="display:none;text-align:center;padding:20px 0;">
+                <div class="spinner" style="margin:0 auto;"></div>
+                <div style="font-size:12px;color:var(--gray-400);margin-top:8px;">Memuat produk mitra...</div>
+            </div>
+            <!-- Form produk -->
+            <div id="admin-stok-produk-wrap" style="display:none;">
+                <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px;">Input Stok Masuk</div>
+                <div id="admin-stok-produk-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+            </div>
+            <!-- Peringatan SQL migration -->
+            <div id="admin-stok-sql-warning" style="display:none;background:#fef3c7;border:1.5px solid #f59e0b;border-radius:var(--radius-sm);padding:12px 14px;">
+                <div style="font-size:12px;font-weight:800;color:#92400e;margin-bottom:6px;"><i class="fa-solid fa-triangle-exclamation"></i> Jalankan SQL ini di Supabase dulu:</div>
+                <code style="display:block;font-size:11px;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:8px 10px;color:#7c2d12;white-space:pre-wrap;line-height:1.6;">ALTER TABLE konsinyasi_stok
+  ADD COLUMN IF NOT EXISTS diinput_admin boolean DEFAULT false;</code>
+                <div style="font-size:10px;color:#92400e;margin-top:6px;">Buka Supabase → SQL Editor → jalankan query di atas → refresh halaman ini.</div>
+            </div>
+
+            <!-- Pesan sudah ada stok -->
+            <div id="admin-stok-sudah-ada" style="display:none;background:var(--amber-50);border:1px solid var(--amber-400);border-radius:var(--radius-sm);padding:12px 14px;">
+                <div style="font-size:12px;font-weight:700;color:var(--amber-600);"><i class="fa-solid fa-triangle-exclamation"></i> Mitra ini sudah memiliki data stok hari ini.</div>
+                <div style="font-size:11px;color:var(--amber-600);margin-top:4px;">Gunakan panel konsinyasi untuk mengubah retur, atau berikan izin edit ulang ke mitra.</div>
+            </div>
+        </div>
+        <!-- Footer aksi -->
+        <div id="admin-stok-footer" style="display:none;padding:14px 16px;border-top:1px solid var(--gray-100);background:var(--gray-50);display:flex;justify-content:flex-end;gap:10px;">
+            <button onclick="tutupModalAdminInputStok()" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-600);">Batal</button>
+            <button onclick="simpanAdminInputStok()" id="btn-admin-stok-simpan" class="btn btn-sm btn-green-sm">
+                <i class="fa-solid fa-paper-plane"></i> Submit Stok Mitra
+            </button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
