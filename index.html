@@ -4365,32 +4365,141 @@
         }
     }
 
+    /* ── Ambil nilai fields satu menu dari DOM (dengan fallback ke cache) ── */
+    /* ── Sinkron stok ke konsinyasi_stok hari ini untuk mitra ──
+       Dipanggil setelah update menu.stok dari POS.
+       Jika sudah ada record konsinyasi hari ini → update detail stok_masuk.
+       Jika belum ada → buat record baru dengan diinput_admin=true.
+    ── */
+    async function _syncKonsinyasiStok(menuId, stokBaru, mitraWA, mitraNama) {
+        if (!mitraWA) return; // hanya untuk menu mitra
+        const today = new Date().toISOString().slice(0, 10);
+
+        try {
+            // Cek record konsinyasi hari ini untuk mitra ini
+            const { data: existing } = await _supabase
+                .from('konsinyasi_stok')
+                .select('id, detail, total_masuk, total_bayar, diinput_admin, edit_unlocked, status')
+                .eq('mitra_wa', mitraWA)
+                .eq('tanggal', today)
+                .maybeSingle();
+
+            if (existing) {
+                // ── JANGAN overwrite jika:
+                //    (a) mitra sudah submit sendiri (diinput_admin=false, status=submitted)
+                //        → mitra yang pegang data, admin hanya bisa ubah via panel Konsinyasi
+                //    (b) edit_unlocked=true → mitra sedang dalam proses koreksi,
+                //        jangan ganggu nilainya
+                const mitraSudahSubmit = !existing.diinput_admin && existing.status === 'submitted';
+                const mitraSedangKoreksi = existing.edit_unlocked === true;
+                if (mitraSudahSubmit || mitraSedangKoreksi) return;
+
+                // Update detail stok_masuk untuk menu yang bersangkutan
+                const detail = Array.isArray(existing.detail) ? [...existing.detail] : [];
+                const idx = detail.findIndex(d => d.menu_id === menuId);
+                if (idx > -1) {
+                    detail[idx] = {
+                        ...detail[idx],
+                        stok_masuk: stokBaru,
+                        terjual: stokBaru,
+                        subtotal: stokBaru * (detail[idx].harga_beli || 0)
+                    };
+                    const totalMasuk = detail.reduce((s, d) => s + (parseInt(d.stok_masuk) || 0), 0);
+                    const totalBayar = detail.reduce((s, d) => s + (parseInt(d.subtotal) || 0), 0);
+                    await _supabase.from('konsinyasi_stok').update({
+                        detail,
+                        total_masuk: totalMasuk,
+                        total_terjual: totalMasuk,
+                        total_bayar: totalBayar,
+                        diinput_admin: true,   // tandai: admin yang terakhir update
+                        updated_at: new Date().toISOString()
+                    }).eq('id', existing.id);
+                }
+            } else {
+                // Belum ada record hari ini → buat baru dengan diinput_admin=true
+                const { data: produkMitra } = await _supabase
+                    .from('menu')
+                    .select('id, nama, harga_beli, stok')
+                    .eq('mitra_wa', mitraWA)
+                    .order('id', { ascending: true });
+
+                if (!produkMitra || produkMitra.length === 0) return;
+
+                const detail = produkMitra.map(p => ({
+                    menu_id: p.id,
+                    nama: p.nama,
+                    harga_beli: p.harga_beli || 0,
+                    stok_masuk: p.id === menuId ? stokBaru : (parseInt(p.stok) || 0),
+                    retur: 0,
+                    terjual: p.id === menuId ? stokBaru : (parseInt(p.stok) || 0),
+                    subtotal: (p.id === menuId ? stokBaru : (parseInt(p.stok) || 0)) * (p.harga_beli || 0),
+                    is_verified: false
+                }));
+
+                const totalMasuk = detail.reduce((s, d) => s + d.stok_masuk, 0);
+                await _supabase.from('konsinyasi_stok').insert([{
+                    mitra_wa: mitraWA,
+                    mitra_nama: mitraNama || mitraWA,
+                    tanggal: today,
+                    total_masuk: totalMasuk,
+                    total_retur: 0,
+                    total_terjual: totalMasuk,
+                    total_bayar: detail.reduce((s, d) => s + d.subtotal, 0),
+                    detail,
+                    status: 'submitted',
+                    diinput_admin: true,
+                    edit_unlocked: false,
+                    updated_at: new Date().toISOString()
+                }]);
+            }
+        } catch (e) {
+            console.warn('[pos] _syncKonsinyasiStok error:', e);
+        }
+    }
+
+    function _ambilNilaiMenuDariDOM(id, cache) {
+        const m = cache || {};
+        // Baca nilai stok dari input; jika input tidak ada di DOM (tabel disaring/filter), pakai cache
+        const stokEl = document.getElementById(`stok-${id}`);
+        const stok   = stokEl !== null ? (parseInt(stokEl.value) || 0) : (parseInt(m.stok) || 0);
+
+        const tersediaEl  = document.getElementById(`tersedia-${id}`);
+        const is_tersedia = tersediaEl !== null
+            ? tersediaEl.value === 'true'
+            : (m.is_tersedia !== undefined ? m.is_tersedia : true);
+
+        const harga_normal     = parseInt(document.getElementById(`price-${id}`)?.value)    || m.harga_normal     || 0;
+        const harga_flash_sale = parseInt(document.getElementById(`fs-price-${id}`)?.value) || m.harga_flash_sale || 0;
+        const is_flash_sale    = document.getElementById(`status-fs-${id}`)
+            ? parseInt(document.getElementById(`status-fs-${id}`).value)
+            : (m.is_flash_sale || 0);
+
+        return { stok, is_tersedia, harga_normal, harga_flash_sale, is_flash_sale };
+    }
+
     /* ── Sinkron SATU menu mitra ke Supabase (push stok + status dari input di baris itu) ── */
     async function sinkronSatuMitra(id) {
         const m = currentMenusCache.find(x => x.id === id);
         if (!m || !m.mitra_wa) return;
 
-        const stok        = parseInt(document.getElementById(`stok-${id}`)?.value) || 0;
-        const is_tersedia = document.getElementById(`tersedia-${id}`)?.value === 'true';
-        const harga_normal    = parseInt(document.getElementById(`price-${id}`)?.value) || m.harga_normal;
-        const harga_flash_sale = parseInt(document.getElementById(`fs-price-${id}`)?.value) || m.harga_flash_sale || 0;
-        const is_flash_sale   = parseInt(document.getElementById(`status-fs-${id}`)?.value) || 0;
+        const payload = _ambilNilaiMenuDariDOM(id, m);
 
         const btn = document.getElementById(`btn-mitra-sync-${id}`);
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; }
 
-        const { error } = await _supabase.from('menu').update({
-            stok, is_tersedia, harga_normal, harga_flash_sale, is_flash_sale
-        }).eq('id', id);
+        const { error } = await _supabase.from('menu').update(payload).eq('id', id);
 
         if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Sinkron'; }
 
         if (error) {
-            showToast(`Gagal sinkron ${m.nama}!`, 'amber');
+            console.error('[pos] sinkronSatuMitra error:', error);
+            showToast(`❌ Gagal sinkron ${m.nama}! (${error.message || 'coba lagi'})`, 'amber');
         } else {
-            // update cache lokal
+            // Update cache lokal agar re-render tidak balik ke nilai lama
             const idx = currentMenusCache.findIndex(x => x.id === id);
-            if (idx > -1) Object.assign(currentMenusCache[idx], { stok, is_tersedia, harga_normal, harga_flash_sale, is_flash_sale });
+            if (idx > -1) Object.assign(currentMenusCache[idx], payload);
+            // Sinkron juga ke konsinyasi_stok hari ini agar tab Input Stok & Laporan mitra ikut terupdate
+            await _syncKonsinyasiStok(id, payload.stok, m.mitra_wa, m.mitra_nama);
             showToast(`✅ ${m.nama} → Portal Mitra (${m.mitra_nama || m.mitra_wa}) tersinkron!`);
             _tampilStatusSinkron(`${m.nama} berhasil dikirim ke Portal Mitra`);
         }
@@ -4405,29 +4514,64 @@
 
         showToast(`⏳ Menyinkronkan ${mitraMenu.length} menu mitra...`, 'amber');
 
-        let sukses = 0, gagal = 0;
+        let sukses = 0, gagal = 0, gagalNama = [];
+        // Kelompokkan menu per mitra untuk efisiensi sync konsinyasi
+        const mitraMenuMap = {};
         for (const m of mitraMenu) {
-            const stok         = parseInt(document.getElementById(`stok-${m.id}`)?.value ?? m.stok) || 0;
-            const is_tersedia  = (document.getElementById(`tersedia-${m.id}`)?.value ?? (m.is_tersedia ? 'true' : 'false')) === 'true';
-            const harga_normal      = parseInt(document.getElementById(`price-${m.id}`)?.value) || m.harga_normal;
-            const harga_flash_sale  = parseInt(document.getElementById(`fs-price-${m.id}`)?.value) || m.harga_flash_sale || 0;
-            const is_flash_sale     = parseInt(document.getElementById(`status-fs-${m.id}`)?.value) || m.is_flash_sale || 0;
+            const payload = _ambilNilaiMenuDariDOM(m.id, m);
 
-            const { error } = await _supabase.from('menu').update({
-                stok, is_tersedia, harga_normal, harga_flash_sale, is_flash_sale
-            }).eq('id', m.id);
+            const { error } = await _supabase.from('menu').update(payload).eq('id', m.id);
 
-            if (error) { gagal++; }
-            else {
+            if (error) {
+                gagal++;
+                gagalNama.push(m.nama);
+                console.error(`[pos] sinkronSemuaMitra gagal untuk ${m.id}:`, error);
+            } else {
                 sukses++;
                 const idx = currentMenusCache.findIndex(x => x.id === m.id);
-                if (idx > -1) Object.assign(currentMenusCache[idx], { stok, is_tersedia, harga_normal, harga_flash_sale, is_flash_sale });
+                if (idx > -1) Object.assign(currentMenusCache[idx], payload);
+                // Kumpulkan per mitra_wa untuk sync konsinyasi
+                if (!mitraMenuMap[m.mitra_wa]) mitraMenuMap[m.mitra_wa] = { nama: m.mitra_nama || m.mitra_wa, items: [] };
+                mitraMenuMap[m.mitra_wa].items.push({ id: m.id, stok: payload.stok });
+            }
+        }
+
+        // Sync konsinyasi_stok per mitra (satu record per mitra per hari)
+        for (const [wa, { nama, items }] of Object.entries(mitraMenuMap)) {
+            // Ambil satu record konsinyasi hari ini untuk mitra ini
+            const today = new Date().toISOString().slice(0, 10);
+            const { data: existing } = await _supabase
+                .from('konsinyasi_stok')
+                .select('id, detail, diinput_admin')
+                .eq('mitra_wa', wa)
+                .eq('tanggal', today)
+                .maybeSingle();
+
+            if (existing && Array.isArray(existing.detail)) {
+                // Update semua item yang di-sinkron sekaligus
+                const detail = [...existing.detail];
+                items.forEach(({ id, stok }) => {
+                    const di = detail.findIndex(d => d.menu_id === id);
+                    if (di > -1) {
+                        detail[di] = { ...detail[di], stok_masuk: stok, terjual: stok, subtotal: stok * (detail[di].harga_beli || 0) };
+                    }
+                });
+                const totalMasuk = detail.reduce((s, d) => s + (parseInt(d.stok_masuk) || 0), 0);
+                const totalBayar = detail.reduce((s, d) => s + (parseInt(d.subtotal) || 0), 0);
+                await _supabase.from('konsinyasi_stok').update({
+                    detail, total_masuk: totalMasuk, total_terjual: totalMasuk,
+                    total_bayar: totalBayar, diinput_admin: true,
+                    updated_at: new Date().toISOString()
+                }).eq('id', existing.id);
+            } else if (!existing) {
+                // Buat record baru via helper (gunakan item pertama sebagai trigger)
+                if (items.length > 0) await _syncKonsinyasiStok(items[0].id, items[0].stok, wa, nama);
             }
         }
 
         const msg = gagal === 0
             ? `✅ ${sukses} menu mitra berhasil disinkronkan ke Portal Mitra!`
-            : `⚠ ${sukses} sukses, ${gagal} gagal. Coba ulangi.`;
+            : `⚠ ${sukses} sukses, ${gagal} gagal: ${gagalNama.slice(0,3).join(', ')}${gagalNama.length > 3 ? '...' : ''}. Coba ulangi.`;
         showToast(msg, gagal > 0 ? 'amber' : 'green');
         _tampilStatusSinkron(gagal === 0 ? `${sukses} menu tersinkron ke Portal Mitra` : `${sukses} sukses, ${gagal} gagal`);
         renderMenuTable(currentMenusCache);
@@ -4446,23 +4590,39 @@
     }
 
     async function updateSingleMenu(id) {
-        const nama = document.getElementById(`name-${id}`).value.trim();
-        const kategori = document.getElementById(`kat-${id}`).value.trim();
-        const gambar_url = document.getElementById(`img-${id}`).value.trim();
+        const nama         = document.getElementById(`name-${id}`).value.trim();
+        const kategori     = document.getElementById(`kat-${id}`).value.trim();
+        const gambar_url   = document.getElementById(`img-${id}`).value.trim();
         const harga_normal = parseInt(document.getElementById(`price-${id}`).value) || 0;
-        const harga_beli = parseInt(document.getElementById(`hpp-${id}`).value) || 0;
+        const harga_beli   = parseInt(document.getElementById(`hpp-${id}`).value) || 0;
         const harga_flash_sale = parseInt(document.getElementById(`fs-price-${id}`).value) || 0;
-        const is_flash_sale = parseInt(document.getElementById(`status-fs-${id}`).value);
-        const is_tersedia = document.getElementById(`tersedia-${id}`).value === 'true';
+        const is_flash_sale    = parseInt(document.getElementById(`status-fs-${id}`).value);
+        const is_tersedia      = document.getElementById(`tersedia-${id}`).value === 'true';
+        const stok             = parseInt(document.getElementById(`stok-${id}`).value) || 0;
 
-        const updatePayload = { nama, kategori, gambar_url, harga_normal, harga_beli, harga_flash_sale, is_flash_sale, is_tersedia };
-        updatePayload.stok = parseInt(document.getElementById(`stok-${id}`).value) || 0;
+        const updatePayload = { nama, kategori, gambar_url, harga_normal, harga_beli, harga_flash_sale, is_flash_sale, is_tersedia, stok };
 
         const { error } = await _supabase.from('menu').update(updatePayload).eq('id', id);
 
-        if (error) { showToast('Gagal update menu!', 'amber'); return; }
-        showToast('✅ Menu berhasil diupdate!');
-        fetchMenuManagement();
+        if (error) { showToast('❌ Gagal update menu! ' + (error.message || ''), 'amber'); return; }
+
+        // Update cache lokal langsung (tanpa re-fetch seluruh tabel)
+        const idx = currentMenusCache.findIndex(x => x.id === id);
+        if (idx > -1) Object.assign(currentMenusCache[idx], updatePayload);
+
+        // Jika menu ini milik mitra, beri info bahwa perubahan sudah tersinkron
+        const m = currentMenusCache[idx];
+        if (m && m.mitra_wa) {
+            // Sinkron juga ke konsinyasi_stok agar tab Input Stok & Laporan mitra ikut terupdate
+            await _syncKonsinyasiStok(id, stok, m.mitra_wa, m.mitra_nama);
+            showToast(`✅ Menu berhasil diupdate & tersinkron ke Portal Mitra (${m.mitra_nama || m.mitra_wa})!`);
+            _tampilStatusSinkron(`${nama} tersimpan & sinkron ke Portal Mitra`);
+        } else {
+            showToast('✅ Menu berhasil diupdate!');
+        }
+
+        // Re-render tabel dengan cache yang sudah diperbarui
+        renderMenuTable(currentMenusCache);
     }
 
     async function deleteMenu(id) {
@@ -4570,11 +4730,11 @@
         const mitra_wa         = document.getElementById('edit-mitra-wa').value.trim() || null;
         const mitra_nama       = document.getElementById('edit-mitra-nama').value.trim() || null;
         const id_baru          = (document.getElementById('edit-id-baru').value.trim()) || editMenuCurrentId;
+        const stok             = parseInt(document.getElementById('edit-stok').value) || 0;
 
         if (!nama || !kategori) { showToast('Nama dan Kategori wajib diisi!', 'amber'); return; }
 
-        const updatePayload = { nama, kategori, gambar_url, harga_normal, harga_beli, harga_flash_sale, is_flash_sale, is_tersedia, deskripsi, mitra_wa, mitra_nama };
-        updatePayload.stok = parseInt(document.getElementById('edit-stok').value) || 0;
+        const updatePayload = { nama, kategori, gambar_url, harga_normal, harga_beli, harga_flash_sale, is_flash_sale, is_tersedia, deskripsi, mitra_wa, mitra_nama, stok };
 
         // Jika ID berubah, perlu ubah primary key — hapus lama lalu insert baru
         if (id_baru !== editMenuCurrentId) {
@@ -4583,20 +4743,40 @@
             if (existing) { showToast('ID "' + id_baru + '" sudah digunakan menu lain!', 'amber'); return; }
 
             const oldData = currentMenusCache.find(x => x.id === editMenuCurrentId);
-            const newRecord = { ...updatePayload, id: id_baru, stok: updatePayload.stok ?? (oldData?.stok || 0) };
+            const newRecord = { ...updatePayload, id: id_baru };
             // Insert dengan ID baru
             const { error: insErr } = await _supabase.from('menu').insert([newRecord]);
             if (insErr) { showToast('Gagal membuat ID baru: ' + (insErr.message || ''), 'amber'); return; }
             // Hapus ID lama
             await _supabase.from('menu').delete().eq('id', editMenuCurrentId);
+
+            // Update cache: hapus lama, tambah baru
+            currentMenusCache = currentMenusCache.filter(x => x.id !== editMenuCurrentId);
+            currentMenusCache.push({ ...(oldData || {}), ...newRecord });
+            currentMenusCache.sort((a, b) => a.id.localeCompare(b.id));
+
             showToast('✅ ID menu berhasil diubah dari "' + editMenuCurrentId + '" ke "' + id_baru + '"!');
         } else {
             const { error } = await _supabase.from('menu').update(updatePayload).eq('id', editMenuCurrentId);
             if (error) { showToast('Gagal menyimpan! ' + (error.message || ''), 'amber'); return; }
-            showToast('✅ Menu berhasil diperbarui!' + (!isJamOperasional() ? ' (Stok tidak diubah — di luar jam operasional)' : ''));
+
+            // Update cache lokal langsung
+            const idx = currentMenusCache.findIndex(x => x.id === editMenuCurrentId);
+            if (idx > -1) Object.assign(currentMenusCache[idx], updatePayload);
+
+            // Beri notifikasi yang sesuai (menu mitra atau biasa)
+            if (mitra_wa) {
+                // Sinkron konsinyasi_stok agar tab Input Stok & Laporan mitra ikut terupdate
+                await _syncKonsinyasiStok(editMenuCurrentId, stok, mitra_wa, mitra_nama);
+                showToast(`✅ Menu berhasil diperbarui & tersinkron ke Portal Mitra (${mitra_nama || mitra_wa})!`);
+                _tampilStatusSinkron(`${nama} tersimpan & sinkron ke Portal Mitra`);
+            } else {
+                showToast('✅ Menu berhasil diperbarui!' + (!isJamOperasional() ? ' (Stok di luar jam operasional)' : ''));
+            }
         }
         closeEditMenuModal();
-        fetchMenuManagement();
+        // Re-render dengan cache yang sudah diperbarui (tidak perlu fetch ulang ke server)
+        renderMenuTable(currentMenusCache);
     }
 
     async function fetchOrders() {
