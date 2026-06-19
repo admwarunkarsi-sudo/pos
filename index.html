@@ -3608,6 +3608,14 @@
     const SUPABASE_ANON_KEY = "sb_publishable_3SBNDNn6tk9Ssl6dZOxi6Q_e2ZFFH14";
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    /* ── Helper: kembalikan tanggal hari ini dalam timezone WIB (UTC+7) ──
+       Gunakan ini sebagai pengganti new Date().toISOString().slice(0,10)
+       agar tidak terjadi salah tanggal saat jam masih < 07:00 UTC.
+    ── */
+    function _todayWIB() {
+        return new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+    }
+
     let currentOrdersCache = [];
     let currentMenusCache = [];
     let cartItems = [];
@@ -4373,7 +4381,7 @@
     ── */
     async function _syncKonsinyasiStok(menuId, stokBaru, mitraWA, mitraNama) {
         if (!mitraWA) return;
-        const today = new Date().toISOString().slice(0, 10);
+        const today = _todayWIB();
 
         try {
             const { data: existing } = await _supabase
@@ -4536,7 +4544,7 @@
 
         // Sync konsinyasi_stok per mitra (satu record per mitra per hari)
         for (const [wa, { nama, items }] of Object.entries(mitraMenuMap)) {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = _todayWIB();
             const { data: existing } = await _supabase
                 .from('konsinyasi_stok')
                 .select('id, detail, diinput_admin, edit_unlocked, status')
@@ -5556,7 +5564,7 @@
         });
         if (!mitraItems.length) return;
 
-        const today = new Date().toISOString().slice(0, 10);
+        const today = _todayWIB();
 
         // Kelompokkan per mitra_wa
         const perMitra = {};
@@ -7702,7 +7710,7 @@
     ── */
     async function backfillKonsinyasiStokHariIni() {
         try {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = _todayWIB();
             const { data: rows, error } = await _supabase
                 .from('konsinyasi_stok')
                 .select('detail, tanggal')
@@ -7793,22 +7801,22 @@
     ── */
     function setupKonsinyasiStokSync() {
         if (_konsStokSyncChannel) return;
-        const today = new Date().toISOString().slice(0, 10);
-
+        // Jangan capture today sekali — hitung ulang per event agar tidak
+        // salah tanggal jika halaman dibuka sebelum midnight WIB.
         _konsStokSyncChannel = _supabase.channel('admin-kons-stok-sync')
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
                 table: 'konsinyasi_stok'
             }, (payload) => {
-                _syncMenuStokDariKonsinyasi(payload.new, today);
+                _syncMenuStokDariKonsinyasi(payload.new, _todayWIB());
             })
             .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
                 table: 'konsinyasi_stok'
             }, (payload) => {
-                _syncMenuStokDariKonsinyasi(payload.new, today);
+                _syncMenuStokDariKonsinyasi(payload.new, _todayWIB());
             })
             .subscribe();
     }
@@ -8366,7 +8374,7 @@
         }
 
         // Sinkronisasi stok ke tabel menu jika tanggal yang diinput adalah hari ini
-        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayStr = _todayWIB();
         if (tgl === todayStr) {
             try {
                 const promises = detail.map(item => 
