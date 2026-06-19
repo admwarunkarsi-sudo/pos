@@ -8668,6 +8668,7 @@
         // Expose admin buttons
         const btnUnlock = document.getElementById('mdk-btn-unlock');
         const btnPaid = document.getElementById('mdk-btn-paid');
+        const btnDelete = document.getElementById('mdk-btn-delete');
 
         if (btnUnlock) {
             btnUnlock.className = `btn btn-sm ${k.edit_unlocked ? 'btn-amber' : 'btn-ghost'}`;
@@ -8688,6 +8689,38 @@
                 // Refresh modal data
                 const updated = _konsinyasiData.find(x => String(x.id) === String(k.id));
                 if (updated) renderMdkDetailTab(updated);
+            };
+        }
+
+        if (btnDelete) {
+            btnDelete.className = 'btn btn-sm btn-danger';
+            btnDelete.innerHTML = `<i class="fa-solid fa-trash-can"></i> Reset & Hapus`;
+            btnDelete.style.background = 'var(--red-600)';
+            btnDelete.style.color = '#fff';
+            btnDelete.style.border = 'none';
+            btnDelete.onclick = async () => {
+                if (confirm(`Apakah Anda yakin ingin menghapus data laporan konsinyasi ${k.mitra_nama || 'mitra'} tanggal ${k.tanggal}?\n\nSemua data stok masuk & retur akan di-reset (dihapus dari DB) sehingga Anda atau mitra bisa menginput ulang kembali.`)) {
+                    btnDelete.disabled = true;
+                    btnDelete.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menghapus...';
+                    
+                    const { error } = await _supabase
+                        .from('konsinyasi_stok')
+                        .delete()
+                        .eq('id', k.id);
+                        
+                    btnDelete.disabled = false;
+                    btnDelete.innerHTML = `<i class="fa-solid fa-trash-can"></i> Reset & Hapus`;
+                    
+                    if (error) {
+                        showToast('Gagal menghapus data: ' + (error.message || ''), 'amber');
+                        return;
+                    }
+                    
+                    showToast('✅ Data laporan konsinyasi berhasil di-reset!', 'green');
+                    tutupModalMitraKonsinyasi();
+                    fetchKonsinyasiList();
+                    fetchKonsinyasiRiwayat();
+                }
             };
         }
     }
@@ -8837,6 +8870,7 @@
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
                         <button id="mdk-btn-unlock" class="btn btn-sm" style="flex:1;font-size:11px;padding:8px;font-family:var(--font);font-weight:700;cursor:pointer;border-radius:6px;"></button>
                         <button id="mdk-btn-paid" class="btn btn-sm" style="flex:1;font-size:11px;padding:8px;font-family:var(--font);font-weight:700;cursor:pointer;border-radius:6px;"></button>
+                        <button id="mdk-btn-delete" class="btn btn-sm btn-danger" style="flex:1;font-size:11px;padding:8px;font-family:var(--font);font-weight:700;cursor:pointer;border-radius:6px;"></button>
                     </div>
                 </div>
             </div>
