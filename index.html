@@ -3758,8 +3758,7 @@
         if (tab === 'konsinyasi') {
             const tgl = document.getElementById('admin-kons-tanggal');
             if (tgl && !tgl.value) {
-                const d = new Date();
-                tgl.value = d.toISOString().slice(0, 10);
+                tgl.value = _todayWIB();
             }
             fetchKonsinyasiList();
             fetchKonsinyasiRiwayat();
