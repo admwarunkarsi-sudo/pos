@@ -2772,7 +2772,7 @@
 <div id="panel-konsinyasi" class="hidden" style="padding:0 16px 24px;">
 <div style="max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:16px;">
 
-    <div class="info-box">
+    <div class="info-box" id="kons-info-box">
         <i class="fa-solid fa-circle-info"></i>
         <span>Panel ini untuk <strong>mengatur retur otomatis</strong> stok mitra konsinyasi. Mitra sudah input stok masuk hari ini. Admin tinggal input jumlah retur (barang tidak terjual dikembalikan) untuk menghitung tagihan yang tepat.</span>
     </div>
@@ -2792,6 +2792,30 @@
                 <label class="form-label">Filter Mitra (opsional)</label>
                 <input type="text" id="admin-kons-filter-mitra" class="form-input" placeholder="Nama atau No. WA mitra..." oninput="filterKonsinyasiList()">
             </div>
+        </div>
+    </div>
+
+    <!-- Daftar Mitra & Retur Input -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title"><i class="fa-solid fa-handshake" style="color:var(--green-600);"></i> Stok Masuk Mitra — Input Retur</span>
+            <button onclick="bukaModalAdminInputStok()" class="btn btn-sm" style="background:var(--amber-100);color:var(--amber-700);border:1px solid var(--amber-300);font-size:11px;padding:6px 12px;">
+                <i class="fa-solid fa-pen-to-square"></i> Input Stok Mitra
+            </button>
+        </div>
+        <div id="kons-loading" class="empty-state hidden">
+            <div class="spinner" style="margin:0 auto;"></div>
+            <p style="margin-top:12px;">Memuat data konsinyasi...</p>
+        </div>
+        <div id="kons-empty" class="empty-state hidden">
+            <i class="fa-solid fa-clipboard-question"></i>
+            <p>Belum ada data konsinyasi untuk tanggal ini.</p>
+            <button onclick="bukaModalAdminInputStok()" class="btn btn-sm btn-green-sm" style="margin-top:12px;font-size:12px;padding:9px 18px;">
+                <i class="fa-solid fa-pen-to-square"></i> Input Stok untuk Mitra
+            </button>
+        </div>
+        <div id="kons-list" style="display:none;">
+            <div id="kons-cards" style="padding:14px;display:flex;flex-direction:column;gap:14px;"></div>
         </div>
     </div>
 
@@ -2866,32 +2890,8 @@
         </div>
     </div>
 
-    <!-- Daftar Mitra & Retur Input -->
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title"><i class="fa-solid fa-handshake" style="color:var(--green-600);"></i> Stok Masuk Mitra — Input Retur</span>
-            <button onclick="bukaModalAdminInputStok()" class="btn btn-sm" style="background:var(--amber-100);color:var(--amber-700);border:1px solid var(--amber-300);font-size:11px;padding:6px 12px;">
-                <i class="fa-solid fa-pen-to-square"></i> Input Stok Mitra
-            </button>
-        </div>
-        <div id="kons-loading" class="empty-state hidden">
-            <div class="spinner" style="margin:0 auto;"></div>
-            <p style="margin-top:12px;">Memuat data konsinyasi...</p>
-        </div>
-        <div id="kons-empty" class="empty-state hidden">
-            <i class="fa-solid fa-clipboard-question"></i>
-            <p>Belum ada data konsinyasi untuk tanggal ini.</p>
-            <button onclick="bukaModalAdminInputStok()" class="btn btn-sm btn-green-sm" style="margin-top:12px;font-size:12px;padding:9px 18px;">
-                <i class="fa-solid fa-pen-to-square"></i> Input Stok untuk Mitra
-            </button>
-        </div>
-        <div id="kons-list" style="display:none;">
-            <div id="kons-cards" style="padding:14px;display:flex;flex-direction:column;gap:14px;"></div>
-        </div>
-    </div>
-
     <!-- Riwayat Konsinyasi Admin -->
-    <div class="card">
+    <div class="card" id="kons-riwayat-section">
         <div class="card-header">
             <span class="card-title"><i class="fa-solid fa-clock-rotate-left" style="color:var(--green-600);"></i> Riwayat Konsinyasi 30 Hari</span>
             <button onclick="fetchKonsinyasiRiwayat()" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-600);font-size:11px;"><i class="fa-solid fa-rotate-right"></i></button>
@@ -6399,6 +6399,14 @@
         // Reset cache penjualan saat tanggal berubah
         _konsinyasiSalesCache = { tanggal: null, byMenu: {} };
 
+        // Reset search filter input & restore other displays
+        const searchInput = document.getElementById('admin-kons-filter-mitra');
+        if (searchInput) searchInput.value = '';
+        const infoBox = document.getElementById('kons-info-box');
+        const riwayatSection = document.getElementById('kons-riwayat-section');
+        if (infoBox) infoBox.style.display = '';
+        if (riwayatSection) riwayatSection.style.display = '';
+
         const loadEl  = document.getElementById('kons-loading');
         const emptyEl = document.getElementById('kons-empty');
         const listEl  = document.getElementById('kons-list');
@@ -6430,11 +6438,47 @@
 
     function filterKonsinyasiList() {
         const q = (document.getElementById('admin-kons-filter-mitra')?.value || '').toLowerCase();
-        if (!q) { renderKonsinyasiCards(_konsinyasiData); return; }
-        renderKonsinyasiCards(_konsinyasiData.filter(d =>
+        
+        const infoBox = document.getElementById('kons-info-box');
+        const rekapSection = document.getElementById('kons-rekap-section');
+        const riwayatSection = document.getElementById('kons-riwayat-section');
+        
+        if (!q) {
+            // Tampilkan kembali elemen-elemen lainnya jika pencarian kosong
+            if (infoBox) infoBox.style.display = '';
+            if (rekapSection && _konsinyasiData.length > 0) rekapSection.style.display = '';
+            if (riwayatSection) riwayatSection.style.display = '';
+            
+            renderKonsinyasiCards(_konsinyasiData);
+            return;
+        }
+        
+        // Sembunyikan elemen-elemen lainnya agar hasil pencarian berada paling atas dan bersih
+        if (infoBox) infoBox.style.display = 'none';
+        if (rekapSection) rekapSection.style.display = 'none';
+        if (riwayatSection) riwayatSection.style.display = 'none';
+        
+        // Filter data mitra yang cocok
+        let filtered = _konsinyasiData.filter(d =>
             (d.mitra_nama || '').toLowerCase().includes(q) ||
             (d.mitra_wa || '').includes(q)
-        ));
+        );
+        
+        // Urutkan data agar yang paling cocok (diawali kata kunci pencarian) muncul paling atas
+        filtered.sort((a, b) => {
+            const nameA = (a.mitra_nama || '').toLowerCase();
+            const nameB = (b.mitra_nama || '').toLowerCase();
+            
+            const startsWithA = nameA.startsWith(q);
+            const startsWithB = nameB.startsWith(q);
+            
+            if (startsWithA && !startsWithB) return -1;
+            if (!startsWithA && startsWithB) return 1;
+            
+            return nameA.localeCompare(nameB);
+        });
+        
+        renderKonsinyasiCards(filtered);
     }
 
     /* ══════════════════════════════════════════════
@@ -6933,133 +6977,55 @@
         const container = document.getElementById('kons-cards');
         if (!list || !list.length) { container.innerHTML = '<p style="color:var(--gray-400);font-size:12px;text-align:center;padding:20px;">Tidak ada data mitra.</p>'; return; }
 
+        container.style.display = 'grid';
+        container.style.gridTemplateColumns = 'repeat(auto-fill, minmax(280px, 1fr))';
+        container.style.gap = '14px';
+        container.style.padding = '14px 0';
+
         container.innerHTML = list.map(k => {
             const detail = k.detail || [];
             const isSelesai = k.status === 'retur_done';
-
-            const rowsHtml = detail.map(d => `
-                <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--gray-100);">
-                    <div style="flex:1;min-width:0;">
-                        <div style="font-size:12px;font-weight:700;color:var(--gray-800);">${d.nama}</div>
-                        <div style="font-size:10px;color:var(--gray-400);">Masuk: <b>${d.stok_masuk}</b> pcs · HPP: Rp ${(d.harga_beli||0).toLocaleString('id-ID')}</div>
-                    </div>
-                    <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;">
-                        <label style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--red-600);">Retur</label>
-                        <div style="display:flex;align-items:center;gap:4px;">
-                            <button onclick="adjKonsRetur('${k.id}','${d.menu_id}',-1)" class="qty-btn" style="width:28px;height:28px;border-color:#fca5a5;" ${isSelesai?'disabled':''}>−</button>
-                            <input type="number" id="kons-retur-${k.id}-${d.menu_id}" value="${d.retur||0}" min="0" max="${d.stok_masuk}"
-                                class="qty-input" style="width:52px;font-size:14px;border-color:#fca5a5;color:var(--red-600);"
-                                oninput="hitungKonsRow('${k.id}','${d.menu_id}')" inputmode="numeric" ${isSelesai?'disabled':''}>
-                            <button onclick="adjKonsRetur('${k.id}','${d.menu_id}',1)" class="qty-btn" style="width:28px;height:28px;border-color:#fca5a5;" ${isSelesai?'disabled':''}>+</button>
-                        </div>
-                    </div>
-                    <div style="text-align:right;flex-shrink:0;min-width:64px;">
-                        <div style="font-size:10px;color:var(--gray-400);">Terjual</div>
-                        <div id="kons-tj-${k.id}-${d.menu_id}" style="font-family:var(--font-mono);font-weight:800;font-size:14px;color:var(--green-700);">${Math.max(0,d.stok_masuk-(d.retur||0))}</div>
-                    </div>
-                </div>
-            `).join('');
+            const isPaid = k.is_paid === true;
 
             const statusBadge = isSelesai
-                ? `<span style="background:var(--green-100);color:var(--green-700);font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;"><i class="fa-solid fa-circle-check"></i> Retur Selesai</span>`
-                : `<span style="background:var(--amber-100);color:var(--amber-600);font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;"><i class="fa-solid fa-clock"></i> Menunggu Retur</span>`;
+                ? `<span style="background:var(--green-100);color:var(--green-700);font-size:9px;font-weight:700;padding:3px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:3px;"><i class="fa-solid fa-circle-check"></i> Selesai</span>`
+                : `<span style="background:var(--amber-100);color:var(--amber-600);font-size:9px;font-weight:700;padding:3px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:3px;"><i class="fa-solid fa-clock"></i> Pending</span>`;
 
             const adminInputBadge = k.diinput_admin
-                ? `<span style="background:#dbeafe;color:#1d4ed8;font-size:10px;font-weight:700;padding:3px 9px;border-radius:99px;"><i class="fa-solid fa-user-shield"></i> Diinput Admin</span>`
+                ? `<span style="background:#dbeafe;color:#1d4ed8;font-size:9px;font-weight:700;padding:3px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:3px;"><i class="fa-solid fa-user-shield"></i> Admin</span>`
                 : '';
 
+            const paidBadge = isPaid
+                ? `<span style="background:var(--green-100);color:var(--green-700);font-size:9px;font-weight:700;padding:3px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:3px;"><i class="fa-solid fa-circle-check"></i> Lunas</span>`
+                : `<span style="background:var(--red-100);color:var(--red-600);font-size:9px;font-weight:700;padding:3px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:3px;"><i class="fa-solid fa-clock"></i> Belum Bayar</span>`;
+
             return `
-            <div style="background:var(--white);border:1.5px solid var(--gray-200);border-radius:var(--radius-lg);overflow:hidden;" id="kons-block-${k.id}">
-                <!-- Header Mitra -->
-                <div style="background:linear-gradient(135deg,var(--green-50),var(--amber-50));padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--gray-200);flex-wrap:wrap;gap:8px;">
-                    <div>
-                        <div style="font-size:13px;font-weight:800;color:var(--gray-800);">${k.mitra_nama || 'Mitra'}${k.edit_request ? ' <span style="background:#fef3c7;color:#92400e;font-size:9px;font-weight:800;padding:2px 8px;border-radius:99px;vertical-align:middle;"><i class="fa-solid fa-pen-to-square"></i> Minta Edit Ulang</span>' : ''}</div>
-                        <div style="font-size:10px;color:var(--gray-500);">${k.mitra_wa} · ${detail.length} produk · Masuk: ${k.total_masuk||0} pcs</div>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                        ${statusBadge}
-                        ${adminInputBadge}
-                        <div id="kons-total-${k.id}" style="font-family:var(--font-mono);font-size:13px;font-weight:800;color:var(--green-700);">
-                            Rp ${(k.total_bayar||0).toLocaleString('id-ID')}
+            <div class="card member-item" style="cursor:pointer;padding:16px;display:flex;flex-direction:column;justify-content:space-between;gap:12px;border:1.5px solid var(--gray-200);transition:all 0.15s;background:#fff;" 
+                 onclick="bukaModalMitraKonsinyasi('${k.id}')"
+                 onmouseover="this.style.borderColor='var(--green-500)';this.style.boxShadow='var(--shadow)';"
+                 onmouseout="this.style.borderColor='var(--gray-200)';this.style.boxShadow='none';">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+                    <div style="min-width:0;flex:1;">
+                        <div style="font-size:14px;font-weight:800;color:var(--gray-800);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${k.mitra_nama || 'Mitra'}</div>
+                        <div style="font-size:11px;color:var(--gray-500);margin-top:2.5px;display:flex;align-items:center;gap:4px;">
+                            <i class="fa-brands fa-whatsapp" style="color:#25d366;"></i> ${k.mitra_wa}
                         </div>
                     </div>
+                    <div style="font-family:var(--font-mono);font-size:14px;font-weight:800;color:var(--green-700);white-space:nowrap;">
+                        Rp ${(k.total_bayar||0).toLocaleString('id-ID')}
+                    </div>
                 </div>
-                <!-- Produk rows -->
-                <div style="padding:0 16px;">${rowsHtml}</div>
-                <!-- Footer action -->
-                <div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--gray-100);background:var(--gray-50);flex-wrap:wrap;">
-                    <!-- Kiri: tombol izin edit ulang + status bayar -->
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-                        <button id="btn-unlock-${k.id}" onclick="toggleIzinEditMitra('${k.id}', ${k.edit_unlocked ? 'true' : 'false'})"
-                            class="btn btn-sm"
-                            style="font-size:11px;padding:6px 13px;background:${k.edit_unlocked ? 'var(--amber-100)' : 'var(--gray-100)'};color:${k.edit_unlocked ? 'var(--amber-600)' : 'var(--gray-500)'};border:1px solid ${k.edit_unlocked ? 'var(--amber-400)' : 'var(--gray-300)'};">
-                            <i class="fa-solid fa-${k.edit_unlocked ? 'lock-open' : 'lock'}"></i>
-                            ${k.edit_unlocked ? 'Izin Edit: Aktif' : 'Izinkan Edit Ulang'}
-                        </button>
-                        <button id="btn-paid-${k.id}" onclick="togglePaidKonsinyasi('${k.id}', ${k.is_paid ? 'true' : 'false'})"
-                            class="btn btn-sm"
-                            style="font-size:11px;padding:6px 13px;background:${k.is_paid ? 'var(--green-100)' : 'var(--red-100)'};color:${k.is_paid ? 'var(--green-700)' : 'var(--red-600)'};border:1px solid ${k.is_paid ? '#86efac' : '#fca5a5'};">
-                            <i class="fa-solid fa-${k.is_paid ? 'circle-check' : 'clock'}"></i>
-                            ${k.is_paid ? 'Sudah Dibayar' : 'Belum Dibayar'}
-                        </button>
-                    </div>
-                    <!-- Kanan: retur & selesaikan -->
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                        ${!isSelesai ? `
-                        <button onclick="simpanReturKonsinyasi('${k.id}')" class="btn btn-sm" style="background:var(--red-100);color:var(--red-600);font-size:12px;padding:7px 16px;">
-                            <i class="fa-solid fa-rotate-left"></i> Simpan Retur
-                        </button>` : ''}
-                        <button onclick="simpanReturKonsinyasi('${k.id}', true)" class="btn btn-sm btn-green-sm" style="font-size:12px;padding:7px 16px;" ${isSelesai?'disabled':''}>
-                            <i class="fa-solid fa-check-circle"></i> ${isSelesai ? 'Sudah Selesai' : 'Selesaikan & Kunci'}
-                        </button>
-                        <button onclick="cetakRekapSatuMitra('${k.id}')" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-700);font-size:12px;padding:7px 13px;" title="Cetak struk rekap mitra ini">
-                            <i class="fa-solid fa-print"></i>
-                        </button>
-                    </div>
+                
+                <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:2px;">
+                    ${statusBadge} ${paidBadge} ${adminInputBadge}
+                </div>
+                
+                <div style="border-top:1px solid var(--gray-100);padding-top:8px;margin-top:2px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--gray-400);font-weight:700;">
+                    <span>${detail.length} Produk</span>
+                    <span style="color:var(--green-600);display:flex;align-items:center;gap:3px;">Detail & Retur <i class="fa-solid fa-chevron-right" style="font-size:9px;"></i></span>
                 </div>
             </div>`;
         }).join('');
-    }
-
-    function adjKonsRetur(konsId, menuId, delta) {
-        const inp = document.getElementById(`kons-retur-${konsId}-${menuId}`);
-        if (!inp) return;
-        const cur = parseInt(inp.value) || 0;
-        inp.value = Math.max(0, cur + delta);
-        hitungKonsRow(konsId, menuId);
-    }
-
-    function hitungKonsRow(konsId, menuId) {
-        const inp = document.getElementById(`kons-retur-${konsId}-${menuId}`);
-        const tjEl = document.getElementById(`kons-tj-${konsId}-${menuId}`);
-        if (!inp || !tjEl) return;
-
-        const kData = _konsinyasiData.find(k => String(k.id) === String(konsId));
-        if (!kData) return;
-        const dRow = (kData.detail || []).find(d => d.menu_id === menuId);
-        if (!dRow) return;
-
-        const retur = Math.min(parseInt(inp.value) || 0, dRow.stok_masuk);
-        inp.value = retur;
-        const terjual = Math.max(0, dRow.stok_masuk - retur);
-        tjEl.textContent = terjual;
-
-        // Update total bayar display
-        recalcKonsTotalDisplay(konsId);
-    }
-
-    function recalcKonsTotalDisplay(konsId) {
-        const kData = _konsinyasiData.find(k => String(k.id) === String(konsId));
-        if (!kData) return;
-        let total = 0;
-        (kData.detail || []).forEach(d => {
-            const inp = document.getElementById(`kons-retur-${konsId}-${d.menu_id}`);
-            const retur = inp ? (parseInt(inp.value) || 0) : (d.retur || 0);
-            const terjual = Math.max(0, d.stok_masuk - retur);
-            total += terjual * (d.harga_beli || 0);
-        });
-        const totalEl = document.getElementById(`kons-total-${konsId}`);
-        if (totalEl) totalEl.textContent = 'Rp ' + total.toLocaleString('id-ID');
     }
 
     async function simpanReturKonsinyasi(konsId, selesai = false) {
@@ -7068,7 +7034,7 @@
 
         let totalRetur = 0, totalTerjual = 0, totalBayar = 0;
         const newDetail = (kData.detail || []).map(d => {
-            const inp = document.getElementById(`kons-retur-${konsId}-${d.menu_id}`);
+            const inp = document.getElementById(`mdk-retur-${konsId}-${d.menu_id}`);
             const retur = inp ? Math.min(parseInt(inp.value) || 0, d.stok_masuk) : (d.retur || 0);
             const terjual = Math.max(0, d.stok_masuk - retur);
             const subtotal = terjual * (d.harga_beli || 0);
@@ -7138,6 +7104,7 @@
             btn.style.border     = `1px solid ${newState ? 'var(--amber-400)' : 'var(--gray-300)'}`;
             btn.setAttribute('onclick', `toggleIzinEditMitra('${konsId}', ${newState})`);
         }
+        renderKonsinyasiCards(_konsinyasiData);
     }
 
     async function togglePaidKonsinyasi(konsId, currentPaid) {
@@ -7168,6 +7135,7 @@
             btn.style.border     = `1px solid ${newState ? '#86efac' : '#fca5a5'}`;
             btn.setAttribute('onclick', `togglePaidKonsinyasi('${konsId}', ${newState})`);
         }
+        renderKonsinyasiCards(_konsinyasiData);
     }
 
     async function fetchKonsinyasiRiwayat() {
@@ -7712,6 +7680,12 @@
         setupMenuRealtimeSync();
         // Terima notifikasi realtime saat mitra minta edit/koreksi stok
         setupEditRequestNotif();
+        // Sinkron stok_masuk dari konsinyasi_stok ke menu secara realtime
+        // (mencakup input mitra dari member area maupun admin dari POS)
+        setupKonsinyasiStokSync();
+        // Backfill: sinkronisasi stok hari ini yang sudah ada di DB ke tabel menu
+        // (menangani data yang masuk sebelum halaman dibuka / listener aktif)
+        setTimeout(backfillKonsinyasiStokHariIni, 1500);
         // Auto-refresh kasir grid setiap menit agar waktu flash sale tetap akurat
         setInterval(() => {
             const kasirPanel = document.getElementById('panel-kasir');
@@ -7721,6 +7695,41 @@
             }
         }, 60000);
     };
+
+    /* ── Backfill: baca semua konsinyasi hari ini lalu sinkronkan stok ke menu ──
+       Dipanggil sekali saat halaman load (dengan delay kecil).
+       Menangani kasus mitra sudah submit stok sebelum halaman POS dibuka.
+    ── */
+    async function backfillKonsinyasiStokHariIni() {
+        try {
+            const today = new Date().toISOString().slice(0, 10);
+            const { data: rows, error } = await _supabase
+                .from('konsinyasi_stok')
+                .select('detail, tanggal')
+                .eq('tanggal', today);
+
+            if (error || !rows || rows.length === 0) return;
+
+            const promises = [];
+            rows.forEach(row => {
+                if (!Array.isArray(row.detail)) return;
+                row.detail.forEach(item => {
+                    if (item.menu_id && typeof item.stok_masuk === 'number' && item.stok_masuk > 0) {
+                        promises.push(
+                            _supabase
+                                .from('menu')
+                                .update({ stok: item.stok_masuk })
+                                .eq('id', item.menu_id)
+                        );
+                    }
+                });
+            });
+
+            if (promises.length > 0) await Promise.all(promises);
+        } catch (err) {
+            console.error('[pos] backfillKonsinyasiStokHariIni error:', err);
+        }
+    }
 
     function setupAdminChatBadgeListener() {
         _supabase.channel('admin-chat-badge')
@@ -7743,6 +7752,8 @@
 
     /* ── Realtime: terima notifikasi permintaan edit stok dari mitra ── */
     let _editRequestChannel = null;
+    let _konsStokSyncChannel = null;
+
     function setupEditRequestNotif() {
         if (_editRequestChannel) return;
         _editRequestChannel = _supabase.channel('admin-edit-request-notif')
@@ -7773,6 +7784,53 @@
                 }
             })
             .subscribe();
+    }
+
+    /* ── Realtime: sinkronisasi stok_masuk dari konsinyasi_stok → menu.stok ──
+       Mendengarkan INSERT dan UPDATE pada tabel konsinyasi_stok.
+       Setiap kali mitra atau admin input/update stok (dari sumber manapun),
+       otomatis update kolom stok di tabel menu agar Kelola Menu selalu sinkron.
+    ── */
+    function setupKonsinyasiStokSync() {
+        if (_konsStokSyncChannel) return;
+        const today = new Date().toISOString().slice(0, 10);
+
+        _konsStokSyncChannel = _supabase.channel('admin-kons-stok-sync')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'konsinyasi_stok'
+            }, (payload) => {
+                _syncMenuStokDariKonsinyasi(payload.new, today);
+            })
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'konsinyasi_stok'
+            }, (payload) => {
+                _syncMenuStokDariKonsinyasi(payload.new, today);
+            })
+            .subscribe();
+    }
+
+    async function _syncMenuStokDariKonsinyasi(row, today) {
+        if (!row || !row.tanggal || row.tanggal !== today) return;
+        const detail = row.detail;
+        if (!Array.isArray(detail) || detail.length === 0) return;
+
+        try {
+            const promises = detail
+                .filter(item => item.menu_id && typeof item.stok_masuk === 'number')
+                .map(item =>
+                    _supabase
+                        .from('menu')
+                        .update({ stok: item.stok_masuk })
+                        .eq('id', item.menu_id)
+                );
+            if (promises.length) await Promise.all(promises);
+        } catch (err) {
+            console.error('[pos] _syncMenuStokDariKonsinyasi error:', err);
+        }
     }
 
     /* Tampilkan dot/badge notifikasi pada tombol Konsinyasi di nav */
@@ -8113,7 +8171,7 @@
     let _adminStokProdukList  = []; // produk mitra yang dipilih
     let _adminStokMitraList   = []; // semua mitra unik
 
-    async function bukaModalAdminInputStok() {
+    window.bukaModalAdminInputStok = async function() {
         const modal = document.getElementById('modal-admin-input-stok');
         if (!modal) return;
 
@@ -8165,13 +8223,13 @@
             _adminStokMitraList.map(m => `<option value="${m.wa}">${m.nama} (${m.wa})</option>`).join('');
     }
 
-    function tutupModalAdminInputStok() {
+    window.tutupModalAdminInputStok = function() {
         const modal = document.getElementById('modal-admin-input-stok');
         if (modal) modal.classList.remove('open');
         _adminStokProdukList = [];
     }
 
-    async function adminStokMitraChanged() {
+    window.adminStokMitraChanged = async function() {
         const wa = document.getElementById('admin-stok-mitra-select').value;
         if (!wa) {
             document.getElementById('admin-stok-produk-wrap').style.display = 'none';
@@ -8246,13 +8304,13 @@
         document.getElementById('admin-stok-footer').style.display = 'flex';
     }
 
-    function adjAdminStok(inputId, delta) {
+    window.adjAdminStok = function(inputId, delta) {
         const inp = document.getElementById(inputId);
         if (!inp) return;
         inp.value = Math.max(0, (parseInt(inp.value) || 0) + delta);
     }
 
-    async function simpanAdminInputStok() {
+    window.simpanAdminInputStok = async function() {
         const wa  = document.getElementById('admin-stok-mitra-select').value;
         const tgl = document.getElementById('admin-kons-tanggal')?.value || new Date().toISOString().slice(0,10);
         if (!wa || _adminStokProdukList.length === 0) return;
@@ -8307,11 +8365,310 @@
             return;
         }
 
+        // Sinkronisasi stok ke tabel menu jika tanggal yang diinput adalah hari ini
+        const todayStr = new Date().toISOString().slice(0, 10);
+        if (tgl === todayStr) {
+            try {
+                const promises = detail.map(item => 
+                    _supabase
+                        .from('menu')
+                        .update({ stok: item.stok_masuk })
+                        .eq('id', item.menu_id)
+                );
+                await Promise.all(promises);
+            } catch (err) {
+                console.error('[pos] Gagal mengupdate stok menu:', err);
+            }
+        }
+
         showToast(`✅ Stok mitra ${mitraNama} berhasil diinput! Form mitra akan terkunci otomatis.`, 'green');
         tutupModalAdminInputStok();
         fetchKonsinyasiList();
         fetchKonsinyasiRiwayat();
     }
+
+    // Tutup modal saat klik overlay
+    document.getElementById('modal-admin-input-stok')?.addEventListener('click', function(e) {
+        if (e.target === this) tutupModalAdminInputStok();
+    });
+
+    // ─── LOGIC MODAL DETAIL & RETUR MITRA KONSINYASI ───
+    let _activeMdkPartnerId = null;
+
+    window.bukaModalMitraKonsinyasi = async function(konsId) {
+        _activeMdkPartnerId = konsId;
+        const k = _konsinyasiData.find(x => String(x.id) === String(konsId));
+        if (!k) return;
+
+        const modal = document.getElementById('modal-detail-konsinyasi');
+        if (!modal) return;
+
+        // Set Header
+        document.getElementById('mdk-mitra-name').textContent = k.mitra_nama || 'Mitra';
+        document.getElementById('mdk-mitra-wa').innerHTML = `<i class="fa-brands fa-whatsapp" style="color:#25d366;"></i> ${k.mitra_wa} &nbsp;·&nbsp; ${k.detail?.length || 0} Produk`;
+        
+        const isSelesai = k.status === 'retur_done';
+
+        const statusLabel = document.getElementById('mdk-status-badge');
+        if (statusLabel) {
+            statusLabel.textContent = isSelesai ? 'Retur Selesai' : 'Menunggu Retur';
+            statusLabel.style.background = isSelesai ? 'rgba(255,255,255,.25)' : 'rgba(251,191,36,.3)';
+            statusLabel.style.color = '#fff';
+        }
+
+        // Set Tab default
+        switchMdkTab('retur');
+
+        // Render lists
+        renderMdkReturTab(k);
+        renderMdkDetailTab(k);
+
+        // Show Modal
+        modal.classList.add('open');
+    }
+
+    window.tutupModalMitraKonsinyasi = function() {
+        const modal = document.getElementById('modal-detail-konsinyasi');
+        if (modal) modal.classList.remove('open');
+        _activeMdkPartnerId = null;
+    }
+
+    window.switchMdkTab = function(tabName) {
+        const tabRetur = document.getElementById('mdk-tab-retur');
+        const tabDetail = document.getElementById('mdk-tab-detail');
+        const btnRetur = document.getElementById('mdk-tab-btn-retur');
+        const btnDetail = document.getElementById('mdk-tab-btn-detail');
+
+        if (tabName === 'retur') {
+            if (tabRetur) tabRetur.style.display = 'flex';
+            if (tabDetail) tabDetail.style.display = 'none';
+            if (btnRetur) {
+                btnRetur.className = 'tab-btn active';
+                btnRetur.style.borderBottom = '3px solid var(--green-600)';
+                btnRetur.style.color = 'var(--green-700)';
+                btnRetur.style.fontWeight = '800';
+            }
+            if (btnDetail) {
+                btnDetail.className = 'tab-btn inactive';
+                btnDetail.style.borderBottom = 'none';
+                btnDetail.style.color = 'var(--gray-500)';
+                btnDetail.style.fontWeight = '500';
+            }
+        } else {
+            if (tabRetur) tabRetur.style.display = 'none';
+            if (tabDetail) tabDetail.style.display = 'flex';
+            if (btnRetur) {
+                btnRetur.className = 'tab-btn inactive';
+                btnRetur.style.borderBottom = 'none';
+                btnRetur.style.color = 'var(--gray-500)';
+                btnRetur.style.fontWeight = '500';
+            }
+            if (btnDetail) {
+                btnDetail.className = 'tab-btn active';
+                btnDetail.style.borderBottom = '3px solid var(--green-600)';
+                btnDetail.style.color = 'var(--green-700)';
+                btnDetail.style.fontWeight = '800';
+            }
+        }
+    }
+
+    function renderMdkReturTab(k) {
+        const listEl = document.getElementById('mdk-products-retur-list');
+        const isSelesai = k.status === 'retur_done';
+        const detail = k.detail || [];
+
+        // Info status
+        const infoEl = document.getElementById('mdk-retur-status-info');
+        if (infoEl) {
+            infoEl.innerHTML = isSelesai 
+                ? `<div style="background:var(--green-50);border:1px solid #86efac;color:var(--green-700);padding:10px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:700;">
+                    <i class="fa-solid fa-circle-check"></i> Retur sudah dikunci oleh admin. Form input dinonaktifkan.
+                   </div>`
+                : `<div style="background:var(--amber-50);border:1px solid #fde68a;color:var(--amber-600);padding:10px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:700;">
+                    <i class="fa-solid fa-circle-info"></i> Masukkan jumlah barang retur (kembali/rusak) hari ini.
+                   </div>`;
+        }
+
+        listEl.innerHTML = detail.map(d => `
+            <div style="display:flex;align-items:center;gap:10px;background:var(--white);border:1.5px solid var(--gray-200);border-radius:var(--radius);padding:10px 12px;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;font-weight:700;color:var(--gray-800);">${d.nama}</div>
+                    <div style="font-size:11px;color:var(--gray-400);margin-top:2px;">
+                        Masuk: <b>${d.stok_masuk}</b> pcs · HPP: Rp ${(d.harga_beli||0).toLocaleString('id-ID')}
+                    </div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;">
+                    <label style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--red-600);">Retur</label>
+                    <div style="display:flex;align-items:center;gap:4px;">
+                        <button onclick="adjMdkRetur('${k.id}','${d.menu_id}',-1)" class="qty-btn" style="width:28px;height:28px;border-color:#fca5a5;" ${isSelesai?'disabled':''}>−</button>
+                        <input type="number" id="mdk-retur-${k.id}-${d.menu_id}" value="${d.retur||0}" min="0" max="${d.stok_masuk}"
+                            class="qty-input" style="width:52px;font-size:14px;border-color:#fca5a5;color:var(--red-600);"
+                            oninput="hitungMdkRow('${k.id}','${d.menu_id}')" inputmode="numeric" ${isSelesai?'disabled':''}>
+                        <button onclick="adjMdkRetur('${k.id}','${d.menu_id}',1)" class="qty-btn" style="width:28px;height:28px;border-color:#fca5a5;" ${isSelesai?'disabled':''}>+</button>
+                    </div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;min-width:64px;">
+                    <div style="font-size:10px;color:var(--gray-400);">Terjual</div>
+                    <div id="mdk-tj-${k.id}-${d.menu_id}" style="font-family:var(--font-mono);font-weight:800;font-size:14px;color:var(--green-700);">${Math.max(0,d.stok_masuk-(d.retur||0))}</div>
+                </div>
+            </div>
+        `).join('');
+
+        // Action buttons di footer modal
+        const btnSave = document.getElementById('mdk-btn-save-retur');
+        const btnFinal = document.getElementById('mdk-btn-finalize');
+        if (btnSave) {
+            btnSave.style.display = isSelesai ? 'none' : 'inline-flex';
+            btnSave.onclick = async () => {
+                await simpanReturKonsinyasi(k.id);
+                // Refresh modal content
+                const updated = _konsinyasiData.find(x => String(x.id) === String(k.id));
+                if (updated) renderMdkReturTab(updated);
+            };
+        }
+        if (btnFinal) {
+            btnFinal.style.display = isSelesai ? 'none' : 'inline-flex';
+            btnFinal.onclick = async () => {
+                await simpanReturKonsinyasi(k.id, true);
+                // Close modal and refresh all
+                tutupModalMitraKonsinyasi();
+            };
+        }
+    }
+
+    window.adjMdkRetur = function(konsId, menuId, delta) {
+        const inp = document.getElementById(`mdk-retur-${konsId}-${menuId}`);
+        if (!inp) return;
+        const cur = parseInt(inp.value) || 0;
+        inp.value = Math.max(0, cur + delta);
+        hitungMdkRow(konsId, menuId);
+    }
+
+    window.hitungMdkRow = function(konsId, menuId) {
+        const inp = document.getElementById(`mdk-retur-${konsId}-${menuId}`);
+        const tjEl = document.getElementById(`mdk-tj-${konsId}-${menuId}`);
+        if (!inp || !tjEl) return;
+
+        const kData = _konsinyasiData.find(k => String(k.id) === String(konsId));
+        if (!kData) return;
+        const dRow = (kData.detail || []).find(d => d.menu_id === menuId);
+        if (!dRow) return;
+
+        const retur = Math.min(parseInt(inp.value) || 0, dRow.stok_masuk);
+        inp.value = retur;
+        const terjual = Math.max(0, dRow.stok_masuk - retur);
+        tjEl.textContent = terjual;
+
+        // Recalculate totals in tab-detail
+        recalcMdkTotals(konsId);
+    }
+
+    function recalcMdkTotals(konsId) {
+        const kData = _konsinyasiData.find(k => String(k.id) === String(konsId));
+        if (!kData) return;
+        
+        let totalMasuk = 0, totalRetur = 0, totalTerjual = 0, totalBayar = 0;
+        
+        (kData.detail || []).forEach(d => {
+            const inp = document.getElementById(`mdk-retur-${konsId}-${d.menu_id}`);
+            const retur = inp ? (parseInt(inp.value) || 0) : (d.retur || 0);
+            const terjual = Math.max(0, d.stok_masuk - retur);
+            
+            totalMasuk += d.stok_masuk;
+            totalRetur += retur;
+            totalTerjual += terjual;
+            totalBayar += terjual * (d.harga_beli || 0);
+
+            // Update subtotal display if active
+            const subtEl = document.getElementById(`mdk-subt-${konsId}-${d.menu_id}`);
+            if (subtEl) subtEl.textContent = 'Rp ' + (terjual * (d.harga_beli || 0)).toLocaleString('id-ID');
+        });
+
+        const sumMasuk = document.getElementById('mdk-sum-masuk');
+        const sumRetur = document.getElementById('mdk-sum-retur');
+        const sumTerjual = document.getElementById('mdk-sum-terjual');
+        const tagihanEl = document.getElementById('mdk-total-bayar-display');
+
+        if (sumMasuk) sumMasuk.textContent = totalMasuk;
+        if (sumRetur) sumRetur.textContent = totalRetur;
+        if (sumTerjual) sumTerjual.textContent = totalTerjual;
+        if (tagihanEl) tagihanEl.textContent = 'Rp ' + totalBayar.toLocaleString('id-ID');
+    }
+
+    function renderMdkDetailTab(k) {
+        const listEl = document.getElementById('mdk-products-detail-list');
+        const detail = k.detail || [];
+        const isPaid = k.is_paid === true;
+
+        // Render product rows read-only
+        listEl.innerHTML = detail.map(d => {
+            const inp = document.getElementById(`mdk-retur-${k.id}-${d.menu_id}`);
+            const retur = inp ? (parseInt(inp.value) || 0) : (d.retur || 0);
+            const terjual = Math.max(0, d.stok_masuk - retur);
+            return `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:12px;">
+                <div>
+                    <div style="font-weight:700;color:var(--gray-800);">${d.nama}</div>
+                    <div style="font-size:10px;color:var(--gray-400);margin-top:2px;">
+                        Masuk: ${d.stok_masuk} · Retur: ${retur} · Terjual: <b>${terjual}</b>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-weight:700;color:var(--gray-500);font-size:10px;">@ Rp ${(d.harga_beli||0).toLocaleString('id-ID')}</div>
+                    <div id="mdk-subt-${k.id}-${d.menu_id}" style="font-family:var(--font-mono);font-weight:800;color:var(--green-700);margin-top:2px;">
+                        Rp ${(terjual * (d.harga_beli||0)).toLocaleString('id-ID')}
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+
+        // Recalculate summary boxes
+        recalcMdkTotals(k.id);
+
+        // Payment status badge
+        const payStatus = document.getElementById('mdk-pay-status-label');
+        if (payStatus) {
+            payStatus.textContent = isPaid ? 'Lunas ✓' : 'Belum Lunas';
+            payStatus.style.background = isPaid ? '#e2fbe8' : '#fee2e2';
+            payStatus.style.border = `1.5px solid ${isPaid ? '#a7f3d0' : '#fca5a5'}`;
+            payStatus.style.color = isPaid ? '#15803d' : '#b91c1c';
+        }
+
+        // Print Rekap button
+        const btnPrint = document.getElementById('mdk-btn-print');
+        if (btnPrint) btnPrint.onclick = () => cetakRekapSatuMitra(k.id);
+
+        // Expose admin buttons
+        const btnUnlock = document.getElementById('mdk-btn-unlock');
+        const btnPaid = document.getElementById('mdk-btn-paid');
+
+        if (btnUnlock) {
+            btnUnlock.className = `btn btn-sm ${k.edit_unlocked ? 'btn-amber' : 'btn-ghost'}`;
+            btnUnlock.innerHTML = `<i class="fa-solid fa-${k.edit_unlocked ? 'lock-open' : 'lock'}"></i> ${k.edit_unlocked ? 'Izin Edit: Aktif' : 'Izinkan Edit'}`;
+            btnUnlock.onclick = async () => {
+                await toggleIzinEditMitra(k.id, k.edit_unlocked === true);
+                // Refresh modal data
+                const updated = _konsinyasiData.find(x => String(x.id) === String(k.id));
+                if (updated) renderMdkDetailTab(updated);
+            };
+        }
+
+        if (btnPaid) {
+            btnPaid.className = `btn btn-sm ${k.is_paid ? 'btn-success' : 'btn-danger'}`;
+            btnPaid.innerHTML = `<i class="fa-solid fa-${k.is_paid ? 'circle-check' : 'clock'}"></i> ${k.is_paid ? 'Sudah Lunas' : 'Tandai Lunas'}`;
+            btnPaid.onclick = async () => {
+                await togglePaidKonsinyasi(k.id, k.is_paid === true);
+                // Refresh modal data
+                const updated = _konsinyasiData.find(x => String(x.id) === String(k.id));
+                if (updated) renderMdkDetailTab(updated);
+            };
+        }
+    }
+
+    // Tutup modal saat klik overlay mdk
+    document.getElementById('modal-detail-konsinyasi')?.addEventListener('click', function(e) {
+        if (e.target === this) tutupModalMitraKonsinyasi();
+    });
 
     // Tutup modal saat klik overlay
     document.getElementById('modal-admin-input-stok')?.addEventListener('click', function(e) {
@@ -8376,6 +8733,100 @@
             <button onclick="simpanAdminInputStok()" id="btn-admin-stok-simpan" class="btn btn-sm btn-green-sm">
                 <i class="fa-solid fa-paper-plane"></i> Submit Stok Mitra
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- ─── MODAL DETAIL KONSINYASI MITRA ─── -->
+<div id="modal-detail-konsinyasi" class="modal-overlay" style="z-index:9000;">
+    <div class="modal-box" style="max-width:600px;width:95%;">
+        <!-- Header -->
+        <div class="modal-header green" style="padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+                <div style="font-size:14px;font-weight:800;color:#fff;"><i class="fa-solid fa-store"></i> Detail & Retur Mitra</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;" id="mdk-mitra-name">—</div>
+                <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:1px;" id="mdk-mitra-wa">—</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span id="mdk-status-badge" class="modal-order-id-badge" style="font-size:9px;">Status: —</span>
+                <button onclick="tutupModalMitraKonsinyasi()" class="modal-close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </div>
+        
+        <!-- Tabs Navigation -->
+        <div style="display:flex;border-bottom:1.5px solid var(--gray-200);background:var(--gray-50);padding:0;">
+            <button onclick="switchMdkTab('retur')" id="mdk-tab-btn-retur" class="tab-btn active" style="flex:1;border-radius:0;border-bottom:3px solid var(--green-600);background:transparent;color:var(--green-700);font-weight:800;padding:12px;font-size:13px;border-top:none;border-left:none;border-right:none;cursor:pointer;">
+                <i class="fa-solid fa-rotate-left"></i> Retur Produk
+            </button>
+            <button onclick="switchMdkTab('detail')" id="mdk-tab-btn-detail" class="tab-btn inactive" style="flex:1;border-radius:0;background:transparent;color:var(--gray-500);padding:12px;font-size:13px;border:none;cursor:pointer;">
+                <i class="fa-solid fa-file-invoice"></i> Detail Laporan
+            </button>
+        </div>
+
+        <!-- Body -->
+        <div class="modal-body" style="padding:16px;max-height:60vh;overflow-y:auto;display:flex;flex-direction:column;gap:14px;">
+            <!-- Tab 1: Retur Form -->
+            <div id="mdk-tab-retur" style="display:flex;flex-direction:column;gap:12px;">
+                <div id="mdk-retur-status-info"></div>
+                <div id="mdk-products-retur-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+            </div>
+
+            <!-- Tab 2: Detail Summary -->
+            <div id="mdk-tab-detail" style="display:none;flex-direction:column;gap:14px;">
+                <!-- Summary Stats -->
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px;text-align:center;">
+                    <div>
+                        <div style="font-size:9px;font-weight:700;color:var(--gray-400);text-transform:uppercase;">Masuk</div>
+                        <div id="mdk-sum-masuk" style="font-family:var(--font-mono);font-size:16px;font-weight:800;color:var(--gray-700);margin-top:2px;">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size:9px;font-weight:700;color:var(--red-600);text-transform:uppercase;">Retur</div>
+                        <div id="mdk-sum-retur" style="font-family:var(--font-mono);font-size:16px;font-weight:800;color:var(--red-600);margin-top:2px;">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size:9px;font-weight:700;color:var(--green-700);text-transform:uppercase;">Terjual</div>
+                        <div id="mdk-sum-terjual" style="font-family:var(--font-mono);font-size:16px;font-weight:800;color:var(--green-700);margin-top:2px;">0</div>
+                    </div>
+                </div>
+
+                <!-- Total Tagihan Box -->
+                <div style="background:linear-gradient(135deg,var(--green-600),var(--green-700));border-radius:var(--radius);padding:14px;display:flex;justify-content:space-between;align-items:center;color:#fff;box-shadow:0 4px 12px rgba(22,197,94,.15);">
+                    <div>
+                        <div style="font-size:10px;opacity:0.8;font-weight:700;text-transform:uppercase;">Total Tagihan</div>
+                        <div id="mdk-total-bayar-display" style="font-family:var(--font-mono);font-size:20px;font-weight:800;margin-top:2px;">Rp 0</div>
+                    </div>
+                    <div id="mdk-pay-status-label" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;white-space:nowrap;">—</div>
+                </div>
+
+                <!-- Product Detail Rows -->
+                <div>
+                    <label class="form-label" style="margin-bottom:8px;font-weight:800;color:var(--gray-600);text-transform:uppercase;font-size:10px;">Rincian Penjualan Produk</label>
+                    <div id="mdk-products-detail-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+                </div>
+
+                <!-- Admin Action Controls -->
+                <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius);padding:12px;display:flex;flex-direction:column;gap:10px;">
+                    <div style="font-size:10px;font-weight:800;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;"><i class="fa-solid fa-sliders"></i> Kontrol Admin</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button id="mdk-btn-unlock" class="btn btn-sm" style="flex:1;font-size:11px;padding:8px;font-family:var(--font);font-weight:700;cursor:pointer;border-radius:6px;"></button>
+                        <button id="mdk-btn-paid" class="btn btn-sm" style="flex:1;font-size:11px;padding:8px;font-family:var(--font);font-weight:700;cursor:pointer;border-radius:6px;"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div id="mdk-footer" style="padding:14px 16px;border-top:1px solid var(--gray-100);background:var(--gray-50);display:flex;justify-content:space-between;align-items:center;gap:10px;">
+            <div>
+                <button id="mdk-btn-print" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-700);font-size:11px;padding:7px 12px;border:1px solid var(--gray-300);">
+                    <i class="fa-solid fa-print"></i> Struk Rekap
+                </button>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button onclick="tutupModalMitraKonsinyasi()" class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-600);font-size:11px;padding:7px 12px;border:1px solid var(--gray-300);">Tutup</button>
+                <button id="mdk-btn-save-retur" class="btn btn-sm" style="background:var(--amber-500);color:#fff;font-size:11px;padding:7px 12px;box-shadow:0 2px 6px rgba(245,158,11,.2);"><i class="fa-solid fa-floppy-disk"></i> Simpan</button>
+                <button id="mdk-btn-finalize" class="btn btn-sm btn-green-sm" style="font-size:11px;padding:7px 12px;"><i class="fa-solid fa-check-circle"></i> Selesai & Kunci</button>
+            </div>
         </div>
     </div>
 </div>
