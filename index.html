@@ -8184,7 +8184,7 @@
         if (!modal) return;
 
         // Ambil tanggal yang sedang aktif di filter konsinyasi
-        const tgl = document.getElementById('admin-kons-tanggal')?.value || new Date().toISOString().slice(0,10);
+        const tgl = document.getElementById('admin-kons-tanggal')?.value || _todayWIB();
         const tglLabel = new Date(tgl + 'T00:00:00').toLocaleDateString('id-ID', {weekday:'long', day:'2-digit', month:'long', year:'numeric'});
         document.getElementById('admin-stok-tgl-label').textContent = tglLabel;
         document.getElementById('admin-stok-tgl-info').style.display = 'block';
@@ -8246,22 +8246,26 @@
             return;
         }
 
-        const tgl = document.getElementById('admin-kons-tanggal')?.value || new Date().toISOString().slice(0,10);
+        const tgl = document.getElementById('admin-kons-tanggal')?.value || _todayWIB();
 
         // Cek apakah mitra sudah punya data stok hari ini
         const { data: existingRec } = await _supabase
             .from('konsinyasi_stok')
-            .select('id, status')
+            .select('id, status, edit_unlocked')
             .eq('mitra_wa', wa)
             .eq('tanggal', tgl)
             .maybeSingle();
 
-        if (existingRec) {
+        // Blokir hanya jika sudah ada record DAN edit tidak dibuka
+        if (existingRec && !existingRec.edit_unlocked) {
             document.getElementById('admin-stok-sudah-ada').style.display = 'block';
             document.getElementById('admin-stok-produk-wrap').style.display = 'none';
             document.getElementById('admin-stok-footer').style.display = 'none';
             return;
         }
+
+        // Jika edit_unlocked = true, simpan ID untuk dipakai saat upsert
+        window._adminStokExistingId = existingRec?.id || null;
 
         document.getElementById('admin-stok-sudah-ada').style.display = 'none';
         document.getElementById('admin-stok-loading').style.display = 'block';
@@ -8320,7 +8324,7 @@
 
     window.simpanAdminInputStok = async function() {
         const wa  = document.getElementById('admin-stok-mitra-select').value;
-        const tgl = document.getElementById('admin-kons-tanggal')?.value || new Date().toISOString().slice(0,10);
+        const tgl = document.getElementById('admin-kons-tanggal')?.value || _todayWIB();
         if (!wa || _adminStokProdukList.length === 0) return;
 
         const mitraObj = _adminStokMitraList.find(m => m.wa === wa);
@@ -8363,13 +8367,29 @@
             updated_at:     new Date().toISOString()
         };
 
-        const { error } = await _supabase.from('konsinyasi_stok').insert([payload]);
+        // Jika sudah ada record (edit_unlocked = true), UPDATE. Jika belum, INSERT.
+        let dbError;
+        const existingId = window._adminStokExistingId || null;
+        if (existingId) {
+            // Update record yang ada, reset edit_unlocked ke false setelah admin input ulang
+            const { error: upErr } = await _supabase
+                .from('konsinyasi_stok')
+                .update({ ...payload, edit_unlocked: false })
+                .eq('id', existingId);
+            dbError = upErr;
+        } else {
+            const { error: insErr } = await _supabase
+                .from('konsinyasi_stok')
+                .insert([payload]);
+            dbError = insErr;
+        }
+        window._adminStokExistingId = null;
 
         btn.disabled = false;
         btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Submit Stok Mitra';
 
-        if (error) {
-            showToast('Gagal menyimpan: ' + (error.message || ''), 'amber');
+        if (dbError) {
+            showToast('Gagal menyimpan: ' + (dbError.message || ''), 'amber');
             return;
         }
 
@@ -8377,7 +8397,7 @@
         const todayStr = _todayWIB();
         if (tgl === todayStr) {
             try {
-                const promises = detail.map(item => 
+                const promises = detail.map(item =>
                     _supabase
                         .from('menu')
                         .update({ stok: item.stok_masuk })
