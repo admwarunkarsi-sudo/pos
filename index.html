@@ -3618,6 +3618,10 @@
 
     let currentOrdersCache = [];
     let currentMenusCache = [];
+    // Peta status kunci stok konsinyasi hari ini: { [mitra_wa]: { status, diinput_admin, edit_unlocked } }
+    // Dipakai untuk mengunci kolom Stok di Kelola Menu jika mitra (Halaman Member) atau
+    // admin (Halaman Konsinyasi) sudah update stok hari itu.
+    let _stokLockMap = {};
     let cartItems = [];
     let editingOrderDbId = null;
     let editingOrderIdText = null;
@@ -4149,7 +4153,73 @@
     async function fetchMenuManagement() {
         const { data: menus } = await _supabase.from('menu').select('*').order('id', { ascending: true });
         currentMenusCache = menus || [];
+        await fetchStokLockStatus();
         renderMenuTable(currentMenusCache);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       KUNCI OTOMATIS KOLOM STOK (Kelola Menu) UNTUK PRODUK MITRA
+       ──────────────────────────────────────────────────────────────
+       Kolom Stok di tabel Kelola Menu otomatis TERKUNCI (tidak bisa
+       diedit manual) untuk produk konsinyasi jika hari ini sudah ada
+       data stok yang disubmit, baik oleh:
+         • Mitra sendiri lewat Halaman Member (Portal Mitra), atau
+         • Admin lewat Halaman Konsinyasi (modal "Input Stok Mitra"
+           atau dengan mencabut/memberi izin edit ke mitra).
+       Stok produk konsinyasi otomatis BERKURANG dari transaksi yang
+       terjadi di Kasir Manual, Order Online (Antrean & Pesanan Member),
+       dan Retur (Halaman Konsinyasi) — bukan dari input manual di sini.
+       Admin tetap bisa membuka kunci lewat tombol "Izinkan Edit" pada
+       panel Konsinyasi jika benar-benar perlu koreksi manual.
+    ══════════════════════════════════════════════════════════════ */
+    async function fetchStokLockStatus() {
+        const today = _todayWIB();
+        try {
+            const { data, error } = await _supabase
+                .from('konsinyasi_stok')
+                .select('mitra_wa, status, diinput_admin, edit_unlocked')
+                .eq('tanggal', today);
+            if (error) { console.warn('[pos] fetchStokLockStatus error:', error); return; }
+            const map = {};
+            (data || []).forEach(row => { if (row.mitra_wa) map[row.mitra_wa] = row; });
+            _stokLockMap = map;
+        } catch (e) {
+            console.warn('[pos] fetchStokLockStatus error:', e);
+        }
+    }
+
+    // true jika stok mitra ini sudah disubmit hari ini & belum dibuka izin editnya
+    function _isStokTerkunci(mitraWA) {
+        if (!mitraWA) return false;
+        const row = _stokLockMap[mitraWA];
+        return !!(row && row.status === 'submitted' && row.edit_unlocked !== true);
+    }
+
+    // Update satu entri lock map (dipakai oleh listener realtime) lalu re-render tabel
+    function _updateStokLockMapDanRerender(row) {
+        if (!row || !row.mitra_wa) return;
+        const today = _todayWIB();
+        if (row.tanggal !== today) return;
+        _stokLockMap[row.mitra_wa] = {
+            mitra_wa: row.mitra_wa,
+            status: row.status,
+            diinput_admin: row.diinput_admin,
+            edit_unlocked: row.edit_unlocked
+        };
+        if (currentMenusCache.length) renderMenuTable(currentMenusCache);
+    }
+
+    // Lompat ke panel Konsinyasi & filter ke mitra terkait, untuk buka kunci/koreksi stok
+    async function bukaKonsinyasiUntukMitra(mitraWA) {
+        switchTab('konsinyasi');
+        const tgl = document.getElementById('admin-kons-tanggal');
+        if (tgl && !tgl.value) tgl.value = _todayWIB();
+        if (typeof fetchKonsinyasiList === 'function') await fetchKonsinyasiList();
+        const filterEl = document.getElementById('admin-kons-filter-mitra');
+        if (filterEl) {
+            filterEl.value = mitraWA;
+            filterKonsinyasiList();
+        }
     }
 
     // ── Realtime: sinkron status Flash Sale / stok dari Portal Mitra ke tabel menu POS ──
@@ -4212,9 +4282,28 @@
             const stokClass = stokNum === 0 ? 'zero' : stokNum <= 5 ? 'low' : 'ok';
             const stokLabel = stokNum === 0 ? '🚫 Habis' : stokNum <= 5 ? `⚠ ${stokNum}` : `✅ ${stokNum}`;
 
-            // Kolom stok: selalu bisa diedit. Di luar jam operasional tetap tampilkan badge Pre-Order (Unlimited)
-            // sebagai info bahwa stok aktual otomatis unlimited selama is_tersedia bukan Habis.
-            const stokCellHtml = `<div class="stok-ctrl">
+            // Kolom stok: terkunci otomatis untuk produk mitra jika mitra (Halaman Member)
+            // atau admin (Halaman Konsinyasi) sudah update stok hari ini. Selain itu,
+            // tetap bisa diedit. Di luar jam operasional tetap tampilkan badge Pre-Order
+            // (Unlimited) sebagai info bahwa stok aktual otomatis unlimited selama
+            // is_tersedia bukan Habis.
+            const lockInfo = m.mitra_wa ? _stokLockMap[m.mitra_wa] : null;
+            const stokTerkunci = _isStokTerkunci(m.mitra_wa);
+            const sumberKunci = lockInfo && lockInfo.diinput_admin ? 'Admin · Halaman Konsinyasi' : 'Mitra · Halaman Member';
+
+            const stokCellHtml = stokTerkunci ? `
+                   <div class="stok-locked-wrap" title="Stok terkunci otomatis — sudah diupdate hari ini oleh ${sumberKunci}. Pengurangan stok berjalan otomatis dari transaksi Kasir/Order Online/Retur. Klik tombol di bawah untuk buka kunci & koreksi manual jika perlu.">
+                        <div class="stok-ctrl">
+                            <button disabled class="stok-adj-btn" style="opacity:.35;cursor:not-allowed;">−</button>
+                            <input type="number" id="stok-${m.id}" value="${stok}" class="tbl-input-num-sm" disabled style="background:var(--gray-100);color:var(--gray-500);cursor:not-allowed;">
+                            <button disabled class="stok-adj-btn" style="opacity:.35;cursor:not-allowed;">+</button>
+                        </div>
+                        <div id="stok-badge-${m.id}" class="stok-badge ${stokClass}" style="margin-top:3px;font-size:8px;">${stokLabel}</div>
+                        <div style="margin-top:3px;font-size:8px;display:inline-flex;align-items:center;gap:3px;background:var(--gray-100);color:var(--gray-500);border:1px solid var(--gray-200);border-radius:5px;padding:2px 6px;font-weight:800;white-space:nowrap;">
+                            <i class="fa-solid fa-lock"></i> ${sumberKunci}
+                        </div>
+                        <button type="button" onclick="bukaKonsinyasiUntukMitra('${m.mitra_wa}')" style="margin-top:3px;font-size:8px;background:none;border:none;color:#2563eb;text-decoration:underline;cursor:pointer;padding:0;">Buka Kunci di Konsinyasi</button>
+                   </div>` : `<div class="stok-ctrl">
                         <button onclick="adjStok('${m.id}',-1)" class="stok-adj-btn">−</button>
                         <input type="number" id="stok-${m.id}" value="${stok}" placeholder="0" class="tbl-input-num-sm" min="0" oninput="updateStokBadge('${m.id}')">
                         <button onclick="adjStok('${m.id}',1)" class="stok-adj-btn">+</button>
@@ -4317,19 +4406,29 @@
         if (nilai === null) return;
         const stokBaru = parseInt(nilai);
         if (isNaN(stokBaru) || stokBaru < 0) { showToast('Nilai stok tidak valid!', 'amber'); return; }
-        if (!confirm(`Yakin ingin mereset STOK SEMUA MENU (${currentMenusCache.length} menu) menjadi ${stokBaru}?`)) return;
 
-        const ids = currentMenusCache.map(m => m.id);
+        // Lewati produk mitra konsinyasi yang stoknya sedang terkunci hari ini
+        // (sudah diupdate oleh Mitra via Halaman Member atau Admin via Halaman Konsinyasi)
+        const targets = currentMenusCache.filter(m => !_isStokTerkunci(m.mitra_wa));
+        const terkunciCount = currentMenusCache.length - targets.length;
+        if (!targets.length) { showToast('🔒 Semua produk sedang terkunci stoknya hari ini, tidak ada yang direset.', 'amber'); return; }
+
+        const confirmMsg = terkunciCount > 0
+            ? `Yakin ingin mereset STOK ${targets.length} menu (di luar ${terkunciCount} menu mitra yang sedang terkunci hari ini) menjadi ${stokBaru}?`
+            : `Yakin ingin mereset STOK SEMUA MENU (${targets.length} menu) menjadi ${stokBaru}?`;
+        if (!confirm(confirmMsg)) return;
+
+        const ids = targets.map(m => m.id);
         const { error } = await _supabase.from('menu').update({ stok: stokBaru }).in('id', ids);
 
         if (error) { showToast('Gagal reset stok!', 'amber'); return; }
-        showToast(`✅ Stok semua menu berhasil direset ke ${stokBaru}!`);
+        showToast(`✅ Stok ${targets.length} menu berhasil direset ke ${stokBaru}!${terkunciCount ? ` (${terkunciCount} menu mitra terkunci dilewati)` : ''}`);
         fetchMenuManagement();
     }
 
     function adjStok(id, delta) {
         const inp = document.getElementById(`stok-${id}`);
-        if (!inp) return;
+        if (!inp || inp.disabled) return;
         const cur = parseInt(inp.value) || 0;
         inp.value = Math.max(0, cur + delta);
         updateStokBadge(id);
@@ -4464,9 +4563,14 @@
 
     function _ambilNilaiMenuDariDOM(id, cache) {
         const m = cache || {};
-        // Baca nilai stok dari input; jika input tidak ada di DOM (tabel disaring/filter), pakai cache
+        // Baca nilai stok dari input; jika input tidak ada di DOM (tabel disaring/filter), pakai cache.
+        // Jika stok mitra ini sedang TERKUNCI (sudah diupdate hari ini via Member/Konsinyasi),
+        // selalu pakai nilai stok dari cache — abaikan apa pun yang ada di input (yang seharusnya disabled).
+        const terkunci = _isStokTerkunci(m.mitra_wa);
         const stokEl = document.getElementById(`stok-${id}`);
-        const stok   = stokEl !== null ? (parseInt(stokEl.value) || 0) : (parseInt(m.stok) || 0);
+        const stok = terkunci
+            ? (parseInt(m.stok) || 0)
+            : (stokEl !== null ? (parseInt(stokEl.value) || 0) : (parseInt(m.stok) || 0));
 
         const tersediaEl  = document.getElementById(`tersedia-${id}`);
         const is_tersedia = tersediaEl !== null
@@ -4505,7 +4609,10 @@
             if (idx > -1) Object.assign(currentMenusCache[idx], payload);
             // Sinkron juga ke konsinyasi_stok hari ini agar tab Input Stok & Laporan mitra ikut terupdate
             await _syncKonsinyasiStok(id, payload.stok, m.mitra_wa, m.mitra_nama);
-            showToast(`✅ ${m.nama} → Portal Mitra (${m.mitra_nama || m.mitra_wa}) tersinkron!`);
+            const terkunci = _isStokTerkunci(m.mitra_wa);
+            showToast(terkunci
+                ? `✅ ${m.nama} tersinkron (🔒 stok dilewati, sudah terkunci hari ini)!`
+                : `✅ ${m.nama} → Portal Mitra (${m.mitra_nama || m.mitra_wa}) tersinkron!`);
             _tampilStatusSinkron(`${m.nama} berhasil dikirim ke Portal Mitra`);
         }
     }
@@ -4614,7 +4721,13 @@
         const harga_flash_sale = parseInt(document.getElementById(`fs-price-${id}`).value) || 0;
         const is_flash_sale    = parseInt(document.getElementById(`status-fs-${id}`).value);
         const is_tersedia      = document.getElementById(`tersedia-${id}`).value === 'true';
-        const stok             = parseInt(document.getElementById(`stok-${id}`).value) || 0;
+
+        // Jika stok mitra ini sedang TERKUNCI (sudah diupdate hari ini via Halaman Member
+        // atau Halaman Konsinyasi), abaikan nilai stok dari DOM (input seharusnya disabled)
+        // dan pakai nilai stok yang sudah tersimpan agar tidak tertimpa secara tidak sengaja.
+        const mCacheAwal = currentMenusCache.find(x => x.id === id);
+        const terkunci   = _isStokTerkunci(mCacheAwal?.mitra_wa);
+        const stok       = terkunci ? (parseInt(mCacheAwal?.stok) || 0) : (parseInt(document.getElementById(`stok-${id}`).value) || 0);
 
         const updatePayload = { nama, kategori, gambar_url, harga_normal, harga_beli, harga_flash_sale, is_flash_sale, is_tersedia, stok };
 
@@ -4629,10 +4742,14 @@
         // Jika menu ini milik mitra, beri info bahwa perubahan sudah tersinkron
         const m = currentMenusCache[idx];
         if (m && m.mitra_wa) {
-            // Sinkron juga ke konsinyasi_stok agar tab Input Stok & Laporan mitra ikut terupdate
-            await _syncKonsinyasiStok(id, stok, m.mitra_wa, m.mitra_nama);
-            showToast(`✅ Menu berhasil diupdate & tersinkron ke Portal Mitra (${m.mitra_nama || m.mitra_wa})!`);
-            _tampilStatusSinkron(`${nama} tersimpan & sinkron ke Portal Mitra`);
+            if (terkunci) {
+                showToast(`✅ Menu berhasil diupdate! 🔒 Stok ${m.nama} dilewati karena sedang terkunci hari ini.`, 'amber');
+            } else {
+                // Sinkron juga ke konsinyasi_stok agar tab Input Stok & Laporan mitra ikut terupdate
+                await _syncKonsinyasiStok(id, stok, m.mitra_wa, m.mitra_nama);
+                showToast(`✅ Menu berhasil diupdate & tersinkron ke Portal Mitra (${m.mitra_nama || m.mitra_wa})!`);
+                _tampilStatusSinkron(`${nama} tersimpan & sinkron ke Portal Mitra`);
+            }
         } else {
             showToast('✅ Menu berhasil diupdate!');
         }
@@ -7815,6 +7932,7 @@
                 table: 'konsinyasi_stok'
             }, (payload) => {
                 _syncMenuStokDariKonsinyasi(payload.new, _todayWIB());
+                _updateStokLockMapDanRerender(payload.new);
             })
             .on('postgres_changes', {
                 event: 'UPDATE',
@@ -7822,6 +7940,7 @@
                 table: 'konsinyasi_stok'
             }, (payload) => {
                 _syncMenuStokDariKonsinyasi(payload.new, _todayWIB());
+                _updateStokLockMapDanRerender(payload.new);
             })
             .subscribe();
     }
