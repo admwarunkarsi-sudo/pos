@@ -5650,7 +5650,9 @@
                     stokSaatIni = menuData.stok;
                 }
 
+                // Skip jika stok null (artinya unlimited/pre-order — tidak perlu dikurangi)
                 if (stokSaatIni === null || stokSaatIni === undefined) continue;
+
                 const stokBaru = Math.max(0, (parseInt(stokSaatIni) || 0) - (item.qty || 1));
                 await _supabase.from('menu').update({ stok: stokBaru }).eq('id', menuId);
             } catch (e) {
@@ -6543,7 +6545,7 @@
         // Label tanggal
         const tglEl = document.getElementById('admin-kons-tanggal');
         const tgl   = tglEl?.value || '';
-        const tglLabel = tgl ? new Date(tgl + 'T00:00:00').toLocaleDateString('id-ID', {weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : '';
+        const tglLabel = tgl ? new Date(tgl + 'T00:00:00Z').toLocaleDateString('id-ID', {timeZone: 'UTC', weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : '';
         const lblEl = document.getElementById('kons-rekap-tanggal-label');
         if (lblEl) lblEl.textContent = tglLabel;
 
@@ -6708,7 +6710,7 @@
         }
         const tglEl = document.getElementById('admin-kons-tanggal');
         const tgl   = tglEl?.value || '';
-        const tglLabel = tgl ? new Date(tgl + 'T00:00:00').toLocaleDateString('id-ID', {weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : tgl;
+        const tglLabel = tgl ? new Date(tgl + 'T00:00:00Z').toLocaleDateString('id-ID', {timeZone: 'UTC', weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : tgl;
         const salesByMenu = await fetchKonsinyasiSalesData(tgl);
         _printRekapBT(_konsinyasiData, tglLabel, true, salesByMenu);
     }
@@ -6719,7 +6721,7 @@
         if (!kData) { showToast('Data mitra tidak ditemukan.', 'amber'); return; }
         const tglEl = document.getElementById('admin-kons-tanggal');
         const tgl   = tglEl?.value || '';
-        const tglLabel = tgl ? new Date(tgl + 'T00:00:00').toLocaleDateString('id-ID', {weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : tgl;
+        const tglLabel = tgl ? new Date(tgl + 'T00:00:00Z').toLocaleDateString('id-ID', {timeZone: 'UTC', weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : tgl;
         const salesByMenu = await fetchKonsinyasiSalesData(tgl);
         _printRekapBT([kData], tglLabel, false, salesByMenu);
     }
@@ -7171,7 +7173,7 @@
         wrapEl.style.display = '';
         const tbody = document.getElementById('kons-riwayat-tbody');
         tbody.innerHTML = data.map(d => {
-            const tgl = new Date(d.tanggal + 'T00:00:00').toLocaleDateString('id-ID', {weekday:'short',day:'2-digit',month:'short'});
+            const tgl = new Date(d.tanggal + 'T00:00:00Z').toLocaleDateString('id-ID', {timeZone: 'UTC', weekday:'short',day:'2-digit',month:'short'});
             const statusBadge = d.status === 'retur_done'
                 ? `<span style="background:var(--green-100);color:var(--green-700);font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;">✓ Selesai</span>`
                 : `<span style="background:var(--amber-100);color:var(--amber-600);font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;">Pending</span>`;
@@ -7722,10 +7724,14 @@
                 if (!Array.isArray(row.detail)) return;
                 row.detail.forEach(item => {
                     if (item.menu_id && typeof item.stok_masuk === 'number' && item.stok_masuk > 0) {
+                        // Hitung stok tersisa: masuk - terjual - retur (bukan hanya stok_masuk)
+                        const terjual = parseInt(item.terjual) || 0;
+                        const retur   = parseInt(item.retur)   || 0;
+                        const stokSisa = Math.max(0, item.stok_masuk - terjual - retur);
                         promises.push(
                             _supabase
                                 .from('menu')
-                                .update({ stok: item.stok_masuk })
+                                .update({ stok: stokSisa })
                                 .eq('id', item.menu_id)
                         );
                     }
@@ -7828,12 +7834,17 @@
         try {
             const promises = detail
                 .filter(item => item.menu_id && typeof item.stok_masuk === 'number')
-                .map(item =>
-                    _supabase
+                .map(item => {
+                    // Hitung stok tersisa: masuk - terjual - retur
+                    // Ini mencegah menu.stok di-reset ke stok_masuk setiap kali konsinyasi di-update
+                    const terjual = parseInt(item.terjual) || 0;
+                    const retur   = parseInt(item.retur)   || 0;
+                    const stokSisa = Math.max(0, item.stok_masuk - terjual - retur);
+                    return _supabase
                         .from('menu')
-                        .update({ stok: item.stok_masuk })
-                        .eq('id', item.menu_id)
-                );
+                        .update({ stok: stokSisa })
+                        .eq('id', item.menu_id);
+                });
             if (promises.length) await Promise.all(promises);
         } catch (err) {
             console.error('[pos] _syncMenuStokDariKonsinyasi error:', err);
@@ -8184,7 +8195,7 @@
 
         // Ambil tanggal yang sedang aktif di filter konsinyasi
         const tgl = document.getElementById('admin-kons-tanggal')?.value || _todayWIB();
-        const tglLabel = new Date(tgl + 'T00:00:00').toLocaleDateString('id-ID', {weekday:'long', day:'2-digit', month:'long', year:'numeric'});
+        const tglLabel = new Date(tgl + 'T00:00:00Z').toLocaleDateString('id-ID', {timeZone: 'UTC', weekday:'long', day:'2-digit', month:'long', year:'numeric'});
         document.getElementById('admin-stok-tgl-label').textContent = tglLabel;
         document.getElementById('admin-stok-tgl-info').style.display = 'block';
 
