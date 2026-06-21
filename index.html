@@ -2723,6 +2723,9 @@
                             <i class="fa-solid fa-circle-check" style="color:var(--green-600);"></i>
                             <span id="mitra-sync-status-text"></span>
                         </div>
+                        <button onclick="perbaikiStokDariKonsinyasi()" id="btn-perbaiki-stok" class="btn btn-sm" style="background:var(--green-600);color:#fff;font-size:11px;padding:7px 14px;border-radius:8px;white-space:nowrap;box-shadow:0 2px 8px rgba(22,163,74,.3);" title="Tulis ulang stok di Kelola Menu sesuai jumlah Masuk yang sudah diinput Mitra/Admin hari ini. Pakai ini jika stok mitra terlanjur tampil 0/Habis padahal sudah diinput.">
+                            <i class="fa-solid fa-wrench"></i> Perbaiki Stok Sekarang
+                        </button>
                         <button onclick="sinkronSemuaMitra()" class="btn btn-sm" style="background:var(--amber-500);color:#fff;font-size:11px;padding:7px 14px;border-radius:8px;white-space:nowrap;box-shadow:0 2px 8px rgba(245,158,11,.3);">
                             <i class="fa-solid fa-rotate"></i> Sinkron Semua Mitra
                         </button>
@@ -7825,39 +7828,141 @@
     /* ── Backfill: baca semua konsinyasi hari ini lalu sinkronkan stok ke menu ──
        Dipanggil sekali saat halaman load (dengan delay kecil).
        Menangani kasus mitra sudah submit stok sebelum halaman POS dibuka.
+
+       PENTING: hanya mengisi menu.stok untuk produk yang stoknya masih KOSONG
+       (null/undefined) — artinya benar-benar belum pernah disinkron hari ini.
+       Kalau menu.stok sudah berupa angka, berarti sudah pernah disinkron
+       sebelumnya dan/atau sudah berkurang karena transaksi kasir — backfill
+       TIDAK BOLEH menimpanya lagi (kalau menimpa, pengurangan dari penjualan
+       yang sudah terjadi sebelum refresh akan hilang/ke-reset).
+       Sinkronisasi untuk perubahan stok_masuk selanjutnya (mis. mitra koreksi
+       jumlah masuk) ditangani oleh listener realtime _syncMenuStokDariKonsinyasi.
     ── */
     async function backfillKonsinyasiStokHariIni() {
         try {
             const today = _todayWIB();
             const { data: rows, error } = await _supabase
                 .from('konsinyasi_stok')
-                .select('detail, tanggal')
+                .select('id, detail, tanggal')
                 .eq('tanggal', today);
 
             if (error || !rows || rows.length === 0) return;
 
-            const promises = [];
+            // Kumpulkan semua menu_id yang relevan, lalu cek stok-nya saat ini di DB
+            const allMenuIds = [];
             rows.forEach(row => {
                 if (!Array.isArray(row.detail)) return;
                 row.detail.forEach(item => {
-                    if (item.menu_id && typeof item.stok_masuk === 'number' && item.stok_masuk > 0) {
-                        // Hitung stok tersisa: masuk - terjual - retur (bukan hanya stok_masuk)
-                        const terjual = parseInt(item.terjual) || 0;
-                        const retur   = parseInt(item.retur)   || 0;
-                        const stokSisa = Math.max(0, item.stok_masuk - terjual - retur);
+                    if (item.menu_id && typeof item.stok_masuk === 'number') allMenuIds.push(item.menu_id);
+                });
+            });
+            if (!allMenuIds.length) return;
+
+            const { data: menuRows } = await _supabase
+                .from('menu')
+                .select('id, stok')
+                .in('id', allMenuIds);
+            const stokSaatIniMap = {};
+            (menuRows || []).forEach(m => { stokSaatIniMap[m.id] = m.stok; });
+
+            const promises = [];
+            rows.forEach(row => {
+                if (!Array.isArray(row.detail)) return;
+                const rowKey = row.id != null ? String(row.id) : `${row.mitra_wa}|${row.tanggal}`;
+                const nextMap = { ..._lastSyncedStokMasuk[rowKey] };
+                row.detail.forEach(item => {
+                    if (!item.menu_id || typeof item.stok_masuk !== 'number') return;
+                    const stokSaatIni = stokSaatIniMap[item.menu_id];
+                    // Hanya isi kalau menu.stok masih kosong (belum pernah disentuh hari ini)
+                    if (stokSaatIni === null || stokSaatIni === undefined) {
                         promises.push(
                             _supabase
                                 .from('menu')
-                                .update({ stok: stokSisa })
+                                .update({ stok: item.stok_masuk })
                                 .eq('id', item.menu_id)
                         );
                     }
+                    // Tandai sebagai sudah "diketahui" di cache supaya listener realtime
+                    // berikutnya tidak menganggap ini sebagai perubahan baru
+                    nextMap[item.menu_id] = item.stok_masuk;
                 });
+                _lastSyncedStokMasuk[rowKey] = nextMap;
             });
 
             if (promises.length > 0) await Promise.all(promises);
         } catch (err) {
             console.error('[pos] backfillKonsinyasiStokHariIni error:', err);
+        }
+    }
+
+    /* ── PERBAIKAN MANUAL: tulis ulang menu.stok sesuai stok_masuk hari ini ──
+       Dipicu tombol "Perbaiki Stok Sekarang" di panel Kelola Menu.
+       Berbeda dari backfillKonsinyasiStokHariIni (yang hanya mengisi stok yang
+       masih kosong/null), fungsi ini SENGAJA menimpa ulang menu.stok untuk
+       SEMUA produk mitra yang konsinyasinya tercatat hari ini, sesuai jumlah
+       stok_masuk yang sudah diinput Mitra/Admin. Dipakai untuk memperbaiki data
+       yang sudah terlanjur salah (mis. akibat bug versi sebelumnya yang
+       menimpa stok jadi 0). Aman dijalankan kapan saja — kalau sudah ada
+       transaksi kasir hari ini, sebaiknya jalankan setelah cek ulang stok aktual
+       di etalase, karena fungsi ini akan menimpa apa pun stok yang ada sekarang.
+    ── */
+    async function perbaikiStokDariKonsinyasi() {
+        const today = _todayWIB();
+        const btn = document.getElementById('btn-perbaiki-stok');
+
+        if (!confirm(`Perbaiki stok semua produk mitra sesuai jumlah "Masuk" yang sudah diinput hari ini (${today})?\n\nIni akan MENIMPA stok saat ini di Kelola Menu/Kasir dengan jumlah Masuk dari Konsinyasi. Pastikan stok ini belum dikurangi transaksi kasir yang seharusnya tetap dihitung.`)) return;
+
+        if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memperbaiki...'; }
+
+        try {
+            const { data: rows, error } = await _supabase
+                .from('konsinyasi_stok')
+                .select('id, mitra_wa, tanggal, detail')
+                .eq('tanggal', today);
+
+            if (error) throw error;
+            if (!rows || rows.length === 0) {
+                showToast('Tidak ada data konsinyasi untuk hari ini.', 'amber');
+                return;
+            }
+
+            const promises = [];
+            let totalProduk = 0;
+            rows.forEach(row => {
+                if (!Array.isArray(row.detail)) return;
+                const rowKey = row.id != null ? String(row.id) : `${row.mitra_wa}|${row.tanggal}`;
+                const nextMap = { ..._lastSyncedStokMasuk[rowKey] };
+                row.detail.forEach(item => {
+                    if (!item.menu_id || typeof item.stok_masuk !== 'number') return;
+                    totalProduk++;
+                    promises.push(
+                        _supabase
+                            .from('menu')
+                            .update({ stok: item.stok_masuk })
+                            .eq('id', item.menu_id)
+                    );
+                    // Sinkron cache supaya listener realtime tidak menganggap ini "perubahan baru"
+                    nextMap[item.menu_id] = item.stok_masuk;
+                });
+                _lastSyncedStokMasuk[rowKey] = nextMap;
+            });
+
+            if (!promises.length) {
+                showToast('Tidak ada produk dengan data stok masuk untuk diperbaiki.', 'amber');
+                return;
+            }
+
+            await Promise.all(promises);
+            showToast(`✅ Stok ${totalProduk} produk mitra berhasil diperbaiki sesuai data Masuk hari ini!`, 'green');
+
+            // Refresh tampilan: ambil ulang menu dari DB lalu render Kelola Menu & Kasir
+            await fetchMenuManagement();
+            if (typeof renderKasirMenu === 'function') renderKasirMenu();
+        } catch (err) {
+            console.error('[pos] perbaikiStokDariKonsinyasi error:', err);
+            showToast('❌ Gagal memperbaiki stok: ' + (err.message || 'coba lagi'), 'amber');
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wrench"></i> Perbaiki Stok Sekarang'; }
         }
     }
 
@@ -7921,6 +8026,13 @@
        Setiap kali mitra atau admin input/update stok (dari sumber manapun),
        otomatis update kolom stok di tabel menu agar Kelola Menu selalu sinkron.
     ── */
+    // Cache nilai stok_masuk terakhir yang sudah disinkron, per record konsinyasi
+    // (key: konsinyasi_stok.id → { menu_id: stok_masuk }). Dipakai supaya event
+    // UPDATE yang TIDAK mengubah stok_masuk (mis. admin isi Retur, atau toggle
+    // is_verified/is_paid) tidak ikut menimpa ulang menu.stok dan menghapus
+    // pengurangan dari penjualan kasir yang sudah terjadi sepanjang hari.
+    let _lastSyncedStokMasuk = {};
+
     function setupKonsinyasiStokSync() {
         if (_konsStokSyncChannel) return;
         // Jangan capture today sekali — hitung ulang per event agar tidak
@@ -7951,24 +8063,42 @@
         if (!Array.isArray(detail) || detail.length === 0) return;
 
         try {
+            // PENTING: stok yang tampil di Kasir/Kelola Menu = stok_masuk APA ADANYA.
+            // JANGAN dikurangi field "terjual" di sini — field itu adalah estimasi
+            // tagihan ke mitra (terjual = masuk - retur, dipakai untuk hitung Total
+            // Tagihan), BUKAN penjualan riil dari Kasir. Kalau dipakai untuk hitung
+            // stok, hasilnya akan selalu 0 sejak data disubmit (karena masuk - (masuk
+            // - retur) - retur = 0), padahal barang baru saja masuk & belum mulai
+            // dijual. Pengurangan stok riil sudah ditangani terpisah oleh
+            // decrementStok() setiap kali ada transaksi kasir/order selesai.
+            //
+            // Hanya sinkron ulang menu.stok untuk item yang stok_masuk-nya BENAR-BENAR
+            // berubah dibanding sync terakhir (mis. mitra koreksi jumlah masuk).
+            // Event lain seperti pengisian Retur tidak mengubah stok_masuk, jadi
+            // tidak ikut menimpa stok kasir yang sudah berkurang dari penjualan.
+            const rowKey = row.id != null ? String(row.id) : `${row.mitra_wa}|${row.tanggal}`;
+            const lastMap = _lastSyncedStokMasuk[rowKey] || {};
+            const nextMap = { ...lastMap };
+
             const promises = detail
                 .filter(item => item.menu_id && typeof item.stok_masuk === 'number')
+                .filter(item => lastMap[item.menu_id] !== item.stok_masuk)
                 .map(item => {
-                    // Hitung stok tersisa: masuk - terjual - retur
-                    // Ini mencegah menu.stok di-reset ke stok_masuk setiap kali konsinyasi di-update
-                    const terjual = parseInt(item.terjual) || 0;
-                    const retur   = parseInt(item.retur)   || 0;
-                    const stokSisa = Math.max(0, item.stok_masuk - terjual - retur);
+                    nextMap[item.menu_id] = item.stok_masuk;
                     return _supabase
                         .from('menu')
-                        .update({ stok: stokSisa })
+                        .update({ stok: item.stok_masuk })
                         .eq('id', item.menu_id);
                 });
+
+            _lastSyncedStokMasuk[rowKey] = nextMap;
+
             if (promises.length) await Promise.all(promises);
         } catch (err) {
             console.error('[pos] _syncMenuStokDariKonsinyasi error:', err);
         }
     }
+
 
     /* Tampilkan dot/badge notifikasi pada tombol Konsinyasi di nav */
     function _tandaiBadgeKonsinyasiEditReq(namaMitra) {
@@ -8401,10 +8531,12 @@
         document.getElementById('admin-stok-produk-wrap').style.display = 'none';
         document.getElementById('admin-stok-footer').style.display = 'none';
 
-        // Ambil produk mitra
+        // Ambil produk mitra (sertakan stok saat ini agar form bisa default ke stok
+        // terakhir, bukan 0 — supaya produk yang tidak diubah admin tidak ikut
+        // tertimpa jadi 0/Habis saat disimpan)
         const { data: produk } = await _supabase
             .from('menu')
-            .select('id, nama, harga_beli, gambar_url')
+            .select('id, nama, harga_beli, gambar_url, stok')
             .eq('mitra_wa', wa)
             .order('id', { ascending: true });
 
@@ -8432,11 +8564,12 @@
                     <div style="display:flex;align-items:center;gap:4px;">
                         <button type="button" onclick="adjAdminStok('admin-stok-masuk-${p.id}', -1)"
                             style="width:30px;height:30px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);cursor:pointer;font-size:16px;font-weight:800;color:var(--gray-600);display:flex;align-items:center;justify-content:center;">−</button>
-                        <input type="number" id="admin-stok-masuk-${p.id}" value="0" min="0" inputmode="numeric"
+                        <input type="number" id="admin-stok-masuk-${p.id}" value="${(p.stok !== null && p.stok !== undefined) ? p.stok : 0}" min="0" inputmode="numeric"
                             style="width:56px;font-family:var(--font-mono);font-size:16px;font-weight:800;border:1.5px solid var(--gray-200);border-radius:8px;padding:5px 4px;outline:none;text-align:center;color:var(--gray-800);">
                         <button type="button" onclick="adjAdminStok('admin-stok-masuk-${p.id}', 1)"
                             style="width:30px;height:30px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);cursor:pointer;font-size:16px;font-weight:800;color:var(--gray-600);display:flex;align-items:center;justify-content:center;">+</button>
                     </div>
+                    <div style="font-size:8px;color:var(--gray-400);">Stok saat ini: ${(p.stok !== null && p.stok !== undefined) ? p.stok : 0}</div>
                 </div>
             </div>
         `).join('');
