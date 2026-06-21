@@ -8709,8 +8709,12 @@
         // Set Tab default
         switchMdkTab('retur');
 
+        // Ambil data penjualan riil (Kasir Manual + Order Online) hari konsinyasi ini,
+        // dipakai untuk rekomendasi angka Retur = Masuk - Terjual Riil
+        const salesByMenu = k.tanggal ? await fetchKonsinyasiSalesData(k.tanggal) : {};
+
         // Render lists
-        renderMdkReturTab(k);
+        renderMdkReturTab(k, salesByMenu);
         renderMdkDetailTab(k);
 
         // Show Modal
@@ -8762,7 +8766,8 @@
         }
     }
 
-    function renderMdkReturTab(k) {
+    function renderMdkReturTab(k, salesByMenu) {
+        salesByMenu = salesByMenu || {};
         const listEl = document.getElementById('mdk-products-retur-list');
         const isSelesai = k.status === 'retur_done';
         const detail = k.detail || [];
@@ -8775,23 +8780,41 @@
                     <i class="fa-solid fa-circle-check"></i> Retur sudah dikunci oleh admin. Form input dinonaktifkan.
                    </div>`
                 : `<div style="background:var(--amber-50);border:1px solid #fde68a;color:var(--amber-600);padding:10px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:700;">
-                    <i class="fa-solid fa-circle-info"></i> Masukkan jumlah barang retur (kembali/rusak) hari ini.
+                    <i class="fa-solid fa-circle-info"></i> Kolom Retur sudah terisi rekomendasi otomatis (Masuk − Terjual Riil dari Kasir Manual &amp; Order Online). Cek &amp; koreksi sesuai kondisi barang sebenarnya sebelum disimpan.
                    </div>`;
         }
 
-        listEl.innerHTML = detail.map(d => `
+        listEl.innerHTML = detail.map(d => {
+            const sales      = salesByMenu[d.menu_id] || salesByMenu[d.nama] || {};
+            const kasirQty   = sales.kasir  || 0;
+            const onlineQty  = sales.online || 0;
+            const terjualRiil = kasirQty + onlineQty;
+
+            // Rekomendasi retur = sisa yang belum terjual riil (tidak boleh minus)
+            const rekomendasiRetur = Math.max(0, (d.stok_masuk || 0) - terjualRiil);
+            // Hanya pakai rekomendasi otomatis jika retur belum pernah diisi/disimpan
+            // sebelumnya (masih 0/kosong) dan belum dikunci — supaya tidak menimpa
+            // input admin yang sudah tersimpan kalau modal dibuka ulang.
+            const returAwal = (!isSelesai && !d.retur) ? rekomendasiRetur : (d.retur || 0);
+
+            return `
             <div style="display:flex;align-items:center;gap:10px;background:var(--white);border:1.5px solid var(--gray-200);border-radius:var(--radius);padding:10px 12px;">
                 <div style="flex:1;min-width:0;">
                     <div style="font-size:13px;font-weight:700;color:var(--gray-800);">${d.nama}</div>
                     <div style="font-size:11px;color:var(--gray-400);margin-top:2px;">
                         Masuk: <b>${d.stok_masuk}</b> pcs · HPP: Rp ${(d.harga_beli||0).toLocaleString('id-ID')}
                     </div>
+                    <div style="font-size:10px;color:var(--green-600);margin-top:2px;font-weight:700;">
+                        <i class="fa-solid fa-cash-register"></i> Kasir: ${kasirQty} &nbsp;
+                        <i class="fa-solid fa-globe"></i> Online: ${onlineQty} &nbsp;
+                        = Terjual Riil: ${terjualRiil} pcs
+                    </div>
                 </div>
                 <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;">
                     <label style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--red-600);">Retur</label>
                     <div style="display:flex;align-items:center;gap:4px;">
                         <button onclick="adjMdkRetur('${k.id}','${d.menu_id}',-1)" class="qty-btn" style="width:28px;height:28px;border-color:#fca5a5;" ${isSelesai?'disabled':''}>−</button>
-                        <input type="number" id="mdk-retur-${k.id}-${d.menu_id}" value="${d.retur||0}" min="0" max="${d.stok_masuk}"
+                        <input type="number" id="mdk-retur-${k.id}-${d.menu_id}" value="${returAwal}" min="0" max="${d.stok_masuk}"
                             class="qty-input" style="width:52px;font-size:14px;border-color:#fca5a5;color:var(--red-600);"
                             oninput="hitungMdkRow('${k.id}','${d.menu_id}')" inputmode="numeric" ${isSelesai?'disabled':''}>
                         <button onclick="adjMdkRetur('${k.id}','${d.menu_id}',1)" class="qty-btn" style="width:28px;height:28px;border-color:#fca5a5;" ${isSelesai?'disabled':''}>+</button>
@@ -8799,10 +8822,10 @@
                 </div>
                 <div style="text-align:right;flex-shrink:0;min-width:64px;">
                     <div style="font-size:10px;color:var(--gray-400);">Terjual</div>
-                    <div id="mdk-tj-${k.id}-${d.menu_id}" style="font-family:var(--font-mono);font-weight:800;font-size:14px;color:var(--green-700);">${Math.max(0,d.stok_masuk-(d.retur||0))}</div>
+                    <div id="mdk-tj-${k.id}-${d.menu_id}" style="font-family:var(--font-mono);font-weight:800;font-size:14px;color:var(--green-700);">${Math.max(0,d.stok_masuk-returAwal)}</div>
                 </div>
             </div>
-        `).join('');
+        `}).join('');
 
         // Action buttons di footer modal
         const btnSave = document.getElementById('mdk-btn-save-retur');
@@ -8813,7 +8836,7 @@
                 await simpanReturKonsinyasi(k.id);
                 // Refresh modal content
                 const updated = _konsinyasiData.find(x => String(x.id) === String(k.id));
-                if (updated) renderMdkReturTab(updated);
+                if (updated) renderMdkReturTab(updated, salesByMenu);
             };
         }
         if (btnFinal) {
