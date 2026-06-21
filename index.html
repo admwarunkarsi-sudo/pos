@@ -8533,7 +8533,7 @@
         // Cek apakah mitra sudah punya data stok hari ini
         const { data: existingRec } = await _supabase
             .from('konsinyasi_stok')
-            .select('id, status, edit_unlocked')
+            .select('id, status, edit_unlocked, detail')
             .eq('mitra_wa', wa)
             .eq('tanggal', tgl)
             .maybeSingle();
@@ -8548,6 +8548,14 @@
 
         // Jika edit_unlocked = true, simpan ID untuk dipakai saat upsert
         window._adminStokExistingId = existingRec?.id || null;
+
+        // Peta stok_masuk ("stok awal") + retur/terjual yang SUDAH tersimpan, supaya
+        // saat admin buka ulang form tidak ke-prefill angka menu.stok yang sudah
+        // terkuras penjualan (yang bikin "stok awal" berubah jadi 0 saat disimpan).
+        window._adminStokRecordedDetail = {};
+        (existingRec?.detail || []).forEach(d => {
+            if (d && d.menu_id != null) window._adminStokRecordedDetail[d.menu_id] = d;
+        });
 
         document.getElementById('admin-stok-sudah-ada').style.display = 'none';
         document.getElementById('admin-stok-loading').style.display = 'block';
@@ -8574,7 +8582,16 @@
 
         // Render form input per produk
         const listEl = document.getElementById('admin-stok-produk-list');
-        listEl.innerHTML = produk.map(p => `
+        listEl.innerHTML = produk.map(p => {
+            // Default form = stok_masuk yang sudah tercatat (stok awal) bila ada,
+            // baru fallback ke menu.stok (mis. belum pernah input hari ini).
+            const rec = (window._adminStokRecordedDetail || {})[p.id];
+            const stokAwalTercatat = rec && typeof rec.stok_masuk === 'number' ? rec.stok_masuk : null;
+            const defaultVal = stokAwalTercatat != null
+                ? stokAwalTercatat
+                : ((p.stok !== null && p.stok !== undefined) ? p.stok : 0);
+            const stokKasirNow = (p.stok !== null && p.stok !== undefined) ? p.stok : 0;
+            return `
             <div style="display:flex;align-items:center;gap:10px;background:var(--white);border:1.5px solid var(--gray-200);border-radius:var(--radius);padding:10px 12px;">
                 <img src="${p.gambar_url || ''}" onerror="this.src='https://img.icons8.com/illustrations/kolor/64/fast-food.png'"
                      style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--gray-100);">
@@ -8587,15 +8604,16 @@
                     <div style="display:flex;align-items:center;gap:4px;">
                         <button type="button" onclick="adjAdminStok('admin-stok-masuk-${p.id}', -1)"
                             style="width:30px;height:30px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);cursor:pointer;font-size:16px;font-weight:800;color:var(--gray-600);display:flex;align-items:center;justify-content:center;">−</button>
-                        <input type="number" id="admin-stok-masuk-${p.id}" value="${(p.stok !== null && p.stok !== undefined) ? p.stok : 0}" min="0" inputmode="numeric"
+                        <input type="number" id="admin-stok-masuk-${p.id}" value="${defaultVal}" min="0" inputmode="numeric"
                             style="width:56px;font-family:var(--font-mono);font-size:16px;font-weight:800;border:1.5px solid var(--gray-200);border-radius:8px;padding:5px 4px;outline:none;text-align:center;color:var(--gray-800);">
                         <button type="button" onclick="adjAdminStok('admin-stok-masuk-${p.id}', 1)"
                             style="width:30px;height:30px;border:1.5px solid var(--gray-200);border-radius:8px;background:var(--white);cursor:pointer;font-size:16px;font-weight:800;color:var(--gray-600);display:flex;align-items:center;justify-content:center;">+</button>
                     </div>
-                    <div style="font-size:8px;color:var(--gray-400);">Stok saat ini: ${(p.stok !== null && p.stok !== undefined) ? p.stok : 0}</div>
+                    <div style="font-size:8px;color:var(--gray-400);">${stokAwalTercatat != null ? 'Stok awal: ' + stokAwalTercatat + ' · sisa kasir: ' + stokKasirNow : 'Stok saat ini: ' + stokKasirNow}</div>
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
 
         document.getElementById('admin-stok-produk-wrap').style.display = 'block';
         document.getElementById('admin-stok-footer').style.display = 'flex';
@@ -8621,19 +8639,33 @@
 
         let detail = [];
         let totalMasuk = 0;
+        let totalRetur = 0;
+        let totalBayar = 0;
+        const recorded = window._adminStokRecordedDetail || {};
 
         _adminStokProdukList.forEach(p => {
             const masuk = parseInt(document.getElementById(`admin-stok-masuk-${p.id}`)?.value) || 0;
+            const prev  = recorded[p.id] || {};
+            const harga = p.harga_beli || 0;
+            // Pertahankan retur & status verifikasi yg sudah pernah diisi admin.
+            const retur = Math.min(parseInt(prev.retur) || 0, masuk);
+            const isVerified = prev.is_verified === true;
+            // Terjual = masuk − retur (estimasi tagihan; penjualan riil tetap dihitung
+            // realtime di Portal Mitra via menu.stok). Tidak boleh negatif.
+            const terjual = Math.max(0, masuk - retur);
+            const subtotal = terjual * harga;
             totalMasuk += masuk;
+            totalRetur += retur;
+            totalBayar += subtotal;
             detail.push({
                 menu_id:     p.id,
                 nama:        p.nama,
-                harga_beli:  p.harga_beli || 0,
+                harga_beli:  harga,
                 stok_masuk:  masuk,
-                retur:       0,
-                terjual:     masuk,
-                subtotal:    masuk * (p.harga_beli || 0),
-                is_verified: false
+                retur:       retur,
+                terjual:     terjual,
+                subtotal:    subtotal,
+                is_verified: isVerified
             });
         });
 
@@ -8642,9 +8674,9 @@
             mitra_nama:     mitraNama,
             tanggal:        tgl,
             total_masuk:    totalMasuk,
-            total_retur:    0,
-            total_terjual:  totalMasuk,
-            total_bayar:    detail.reduce((s, d) => s + d.subtotal, 0),
+            total_retur:    totalRetur,
+            total_terjual:  detail.reduce((s, d) => s + d.terjual, 0),
+            total_bayar:    totalBayar,
             detail:         detail,
             status:         'submitted',
             diinput_admin:  true,   // ← FLAG: stok diinput admin, bukan mitra
@@ -8678,17 +8710,49 @@
             return;
         }
 
-        // Sinkronisasi stok ke tabel menu jika tanggal yang diinput adalah hari ini
+        // Sinkronisasi stok ke tabel menu jika tanggal yang diinput adalah hari ini.
+        // PENTING: jangan menimpa menu.stok ke bawah. menu.stok terus berkurang oleh
+        // penjualan kasir/online sepanjang hari; kalau ditimpa balik bisa "menghidupkan"
+        // stok yang sudah terjual ATAU sebaliknya menulis angka kecil/0 yang membuat
+        // perhitungan terjual kacau. Hanya dorong nilai saat:
+        //   (a) produk BARU pertama kali diinput hari ini (belum ada di record), atau
+        //   (b) admin menambah stok awal (stok_masuk baru > stok_masuk lama tercatat) —
+        //       selisih penambahannya ditambahkan ke menu.stok.
         const todayStr = _todayWIB();
         if (tgl === todayStr) {
             try {
-                const promises = detail.map(item =>
-                    _supabase
-                        .from('menu')
-                        .update({ stok: item.stok_masuk })
-                        .eq('id', item.menu_id)
-                );
-                await Promise.all(promises);
+                // Ambil stok kasir terkini utk hitung delta yang aman.
+                const ids = detail.map(d => d.menu_id);
+                const { data: liveMenu } = await _supabase
+                    .from('menu').select('id, stok').in('id', ids);
+                const liveStokMap = {};
+                (liveMenu || []).forEach(m => { liveStokMap[m.id] = m.stok; });
+
+                const promises = [];
+                detail.forEach(item => {
+                    const prev = recorded[item.menu_id] || {};
+                    const prevMasuk = typeof prev.stok_masuk === 'number' ? prev.stok_masuk : null;
+                    const liveStok  = liveStokMap[item.menu_id];
+
+                    if (prevMasuk === null) {
+                        // Belum pernah tercatat hari ini → set awal (hanya bila ada titipan).
+                        if (item.stok_masuk > 0) {
+                            promises.push(_supabase.from('menu')
+                                .update({ stok: item.stok_masuk, is_tersedia: true })
+                                .eq('id', item.menu_id));
+                        }
+                    } else if (item.stok_masuk > prevMasuk) {
+                        // Admin menambah stok awal → tambahkan selisihnya ke stok kasir
+                        // (bukan menimpa), supaya penjualan yang sudah terjadi tetap utuh.
+                        const tambah = item.stok_masuk - prevMasuk;
+                        const base   = (liveStok === null || liveStok === undefined) ? 0 : (parseInt(liveStok) || 0);
+                        promises.push(_supabase.from('menu')
+                            .update({ stok: base + tambah, is_tersedia: true })
+                            .eq('id', item.menu_id));
+                    }
+                    // item.stok_masuk <= prevMasuk → JANGAN sentuh menu.stok.
+                });
+                if (promises.length) await Promise.all(promises);
             } catch (err) {
                 console.error('[pos] Gagal mengupdate stok menu:', err);
             }
