@@ -4210,6 +4210,26 @@
             edit_unlocked: row.edit_unlocked
         };
         if (currentMenusCache.length) renderMenuTable(currentMenusCache);
+        // Realtime rekap: bila panel konsinyasi terbuka utk tanggal yg sama,
+        // perbarui baris/Tagihan/terjual tanpa perlu refresh manual.
+        _refreshRekapKonsinyasiRealtime(row);
+    }
+
+    // Buang cache penjualan & render ulang rekap konsinyasi bila panel sedang
+    // terbuka pada tanggal yang relevan. Dipakai oleh listener realtime (order
+    // baru web/kasir maupun perubahan konsinyasi_stok) agar produk terjual dari
+    // web atau kasir otomatis muncul di rekap & tombol cetak.
+    function _refreshRekapKonsinyasiRealtime(row) {
+        const konsPanel = document.getElementById('panel-konsinyasi');
+        if (!konsPanel || konsPanel.classList.contains('hidden')) return;
+        const tglEl = document.getElementById('admin-kons-tanggal');
+        const tglAktif = tglEl?.value || '';
+        // Jika event punya tanggal & tidak sama dgn yg ditampilkan, abaikan.
+        if (row && row.tanggal && tglAktif && row.tanggal !== tglAktif) return;
+        _konsinyasiSalesCache = { tanggal: null, byMenu: {} };
+        if (Array.isArray(_konsinyasiData) && _konsinyasiData.length) {
+            renderRekapKonsinyasi(_konsinyasiData);
+        }
     }
 
     // Lompat ke panel Konsinyasi & filter ke mitra terkait, untuk buka kunci/koreksi stok
@@ -6923,7 +6943,7 @@
             data = concat(data, enc('-'.repeat(W)), LF);
 
             detail.forEach(d => {
-                const sales = (salesByMenu||{})[d.nama] || {};
+                const sales = (salesByMenu||{})[d.menu_id] || (salesByMenu||{})[d.nama] || {};
                 const kasir  = sales.kasir  || 0;
                 const online = sales.online || 0;
                 const retur  = d.retur || 0;
@@ -7031,7 +7051,7 @@
             let kKasir=0, kOnline=0, kRetur=0;
 
             const prodLines = detail.map(d => {
-                const sales   = (salesByMenu||{})[d.nama] || {};
+                const sales   = (salesByMenu||{})[d.menu_id] || (salesByMenu||{})[d.nama] || {};
                 const kasir   = sales.kasir  || 0;
                 const online  = sales.online || 0;
                 const retur   = d.retur || 0;
@@ -7361,6 +7381,9 @@
                 }
                 // Refresh daftar antrean
                 fetchOrders();
+                // Realtime rekap konsinyasi: penjualan baru (web/kasir) langsung
+                // tercermin di rekap & tombol cetak bila panel sedang terbuka.
+                _refreshRekapKonsinyasiRealtime(null);
             })
             .subscribe();
     }
