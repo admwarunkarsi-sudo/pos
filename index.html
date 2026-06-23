@@ -5176,6 +5176,9 @@
         // Kurangi stok untuk setiap item order online yang diselesaikan
         if (currentModalOrder && currentModalOrder.detail_items) {
             await decrementStok(currentModalOrder.detail_items);
+            // Update terjual di konsinyasi_stok agar laporan mitra ikut terekam
+            // realtime untuk transaksi Order Online (sama seperti Kasir Manual)
+            _updateKonsinyasiTerjual(currentModalOrder.detail_items);
         }
 
         if (!isReward) {
@@ -6676,7 +6679,8 @@
 
         const { data, error } = await _supabase
             .from('orders')
-            .select('sumber, detail_items')
+            .select('sumber, detail_items, status')
+            .eq('status', 'Selesai')
             .gte('created_at', from)
             .lte('created_at', to);
 
