@@ -4229,7 +4229,7 @@
         const tglAktif = tglEl?.value || '';
         // Jika event punya tanggal & tidak sama dgn yg ditampilkan, abaikan.
         if (row && row.tanggal && tglAktif && row.tanggal !== tglAktif) return;
-        _konsinyasiSalesCache = { tanggal: null, byMenu: {} };
+        _konsinyasiRawOrdersCache = { tanggal: null, items: [] };
         if (Array.isArray(_konsinyasiData) && _konsinyasiData.length) {
             renderRekapKonsinyasi(_konsinyasiData);
         }
@@ -5779,7 +5779,7 @@
                 }).eq('id', kons.id);
 
                 // Reset cache penjualan agar rekap ikut terupdate
-                _konsinyasiSalesCache = { tanggal: null, byMenu: {} };
+                _konsinyasiRawOrdersCache = { tanggal: null, items: [] };
 
             } catch (e) {
                 console.warn('[pos] _updateKonsinyasiTerjual error:', e);
@@ -6572,7 +6572,7 @@
         if (!tgl) return;
 
         // Reset cache penjualan saat tanggal berubah
-        _konsinyasiSalesCache = { tanggal: null, byMenu: {} };
+        _konsinyasiRawOrdersCache = { tanggal: null, items: [] };
 
         // Reset search filter input & restore other displays
         const searchInput = document.getElementById('admin-kons-filter-mitra');
@@ -6660,16 +6660,18 @@
        ─── REKAP HARIAN KONSINYASI ───
     ══════════════════════════════════════════════ */
 
-    // Cache penjualan harian untuk rekap konsinyasi
-    let _konsinyasiSalesCache = { tanggal: null, byMenu: {} };
+    // Cache RAW order items (dengan timestamp) per tanggal — tidak langsung
+    // diagregasi, supaya bisa difilter per cutoff waktu (session_started_at)
+    // masing-masing mitra saat dipakai.
+    let _konsinyasiRawOrdersCache = { tanggal: null, items: [] };
 
     /**
-     * Ambil data penjualan harian dari tabel orders untuk tanggal tertentu.
-     * Mengembalikan map: { [menu_id_or_nama]: { kasir: qty, online: qty } }
+     * Ambil & cache item-item order (qty, menu_id/nama, sumber, created_at) untuk
+     * tanggal tertentu. Hanya order berstatus 'Selesai' yang diikutkan.
      */
-    async function fetchKonsinyasiSalesData(tgl) {
-        if (_konsinyasiSalesCache.tanggal === tgl && Object.keys(_konsinyasiSalesCache.byMenu).length) {
-            return _konsinyasiSalesCache.byMenu;
+    async function _fetchKonsinyasiRawOrders(tgl) {
+        if (_konsinyasiRawOrdersCache.tanggal === tgl && _konsinyasiRawOrdersCache.items.length) {
+            return _konsinyasiRawOrdersCache.items;
         }
 
         // Rentang waktu tanggal dalam WIB (UTC+7)
@@ -6679,25 +6681,54 @@
 
         const { data, error } = await _supabase
             .from('orders')
-            .select('sumber, detail_items, status')
+            .select('sumber, detail_items, status, created_at')
             .eq('status', 'Selesai')
             .gte('created_at', from)
             .lte('created_at', to);
 
-        if (error || !data) return {};
+        if (error || !data) return [];
 
-        const byMenu = {};
+        const items = [];
         data.forEach(order => {
             const sumber = order.sumber === 'manual' ? 'kasir' : 'online';
             (order.detail_items || []).forEach(item => {
-                // Gunakan menu_id sebagai key utama (akurat), nama sebagai fallback (order lama)
-                const key = item.menu_id || item.nama;
-                if (!byMenu[key]) byMenu[key] = { kasir: 0, online: 0 };
-                byMenu[key][sumber] += item.qty || 0;
+                items.push({
+                    key: item.menu_id || item.nama,
+                    qty: item.qty || 0,
+                    sumber,
+                    created_at: order.created_at
+                });
             });
         });
 
-        _konsinyasiSalesCache = { tanggal: tgl, byMenu };
+        _konsinyasiRawOrdersCache = { tanggal: tgl, items };
+        return items;
+    }
+
+    /**
+     * Ambil data penjualan harian dari tabel orders untuk tanggal tertentu.
+     * Mengembalikan map: { [menu_id_or_nama]: { kasir: qty, online: qty } }
+     *
+     * sejakWaktu (opsional): jika diisi (ISO timestamp / session_started_at
+     * milik record konsinyasi_stok), HANYA transaksi yang terjadi PADA ATAU
+     * SETELAH waktu ini yang dihitung. Ini mencegah transaksi dari sesi lama
+     * (sebelum mitra/admin submit ulang stok hari itu) ikut tercampur ke
+     * rekap & struk print sesi yang baru.
+     */
+    async function fetchKonsinyasiSalesData(tgl, sejakWaktu) {
+        const items = await _fetchKonsinyasiRawOrders(tgl);
+        const cutoff = sejakWaktu ? new Date(sejakWaktu).getTime() : null;
+
+        const byMenu = {};
+        items.forEach(item => {
+            if (cutoff !== null) {
+                const itemTime = new Date(item.created_at).getTime();
+                if (itemTime < cutoff) return; // dari sesi lama — lewati
+            }
+            if (!byMenu[item.key]) byMenu[item.key] = { kasir: 0, online: 0 };
+            byMenu[item.key][item.sumber] += item.qty;
+        });
+
         return byMenu;
     }
 
@@ -6716,8 +6747,13 @@
         const lblEl = document.getElementById('kons-rekap-tanggal-label');
         if (lblEl) lblEl.textContent = tglLabel;
 
-        // Ambil data penjualan harian
-        const salesByMenu = await fetchKonsinyasiSalesData(tgl);
+        // Ambil data penjualan harian — per mitra, masing-masing dengan cutoff
+        // session_started_at sendiri (supaya transaksi dari sesi lama, sebelum
+        // mitra/admin submit ulang, tidak ikut tercampur ke rekap mitra lain/baru)
+        const salesByKons = {};
+        for (const k of list) {
+            salesByKons[k.id] = await fetchKonsinyasiSalesData(tgl, k.session_started_at);
+        }
 
         // Akumulasi — stok terjual dihitung ulang: masuk - retur - (kasir+online)
         let totalMasuk = 0, totalRetur = 0, totalTerjual = 0, totalBayar = 0;
@@ -6725,6 +6761,7 @@
         let countSelesai = 0, countLunas = 0;
 
         list.forEach(k => {
+            const salesByMenu = salesByKons[k.id] || {};
             totalMasuk   += k.total_masuk   || 0;
             totalRetur   += k.total_retur   || 0;
             totalBayar   += k.total_bayar   || 0;
@@ -6767,7 +6804,8 @@
             const isSelesai = k.status === 'retur_done';
             const isPaid    = k.is_paid === true;
 
-            // Hitung terjual per produk dari sumber penjualan
+            // Hitung terjual per produk dari sumber penjualan (cutoff sesi mitra ini)
+            const salesByMenu = salesByKons[k.id] || {};
             let mitraKasir = 0, mitraOnline = 0, mitraTerjual = 0, mitraSisa = 0;
             const prodRows = detail.map(d => {
                 const sales    = salesByMenu[d.menu_id] || salesByMenu[d.nama] || {};
@@ -6878,8 +6916,13 @@
         const tglEl = document.getElementById('admin-kons-tanggal');
         const tgl   = tglEl?.value || '';
         const tglLabel = tgl ? new Date(tgl + 'T00:00:00Z').toLocaleDateString('id-ID', {timeZone: 'UTC', weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : tgl;
-        const salesByMenu = await fetchKonsinyasiSalesData(tgl);
-        _printRekapBT(_konsinyasiData, tglLabel, true, salesByMenu);
+        // Map per-mitra: masing-masing dihitung dengan cutoff session_started_at
+        // sendiri, agar transaksi sesi lama (sebelum submit ulang) tidak ikut tercetak.
+        const salesByKonsMap = {};
+        for (const k of _konsinyasiData) {
+            salesByKonsMap[k.id] = await fetchKonsinyasiSalesData(tgl, k.session_started_at);
+        }
+        _printRekapBT(_konsinyasiData, tglLabel, true, salesByKonsMap);
     }
 
     /* ── Print Rekap Satu Mitra ── */
@@ -6889,28 +6932,28 @@
         const tglEl = document.getElementById('admin-kons-tanggal');
         const tgl   = tglEl?.value || '';
         const tglLabel = tgl ? new Date(tgl + 'T00:00:00Z').toLocaleDateString('id-ID', {timeZone: 'UTC', weekday:'long',day:'2-digit',month:'long',year:'numeric'}) : tgl;
-        const salesByMenu = await fetchKonsinyasiSalesData(tgl);
-        _printRekapBT([kData], tglLabel, false, salesByMenu);
+        const salesByKonsMap = { [kData.id]: await fetchKonsinyasiSalesData(tgl, kData.session_started_at) };
+        _printRekapBT([kData], tglLabel, false, salesByKonsMap);
     }
 
     /* ── Core: coba BTPrinter dulu, fallback ke window.print() ── */
-    async function _printRekapBT(list, tglLabel, isAll, salesByMenu) {
+    async function _printRekapBT(list, tglLabel, isAll, salesByKonsMap) {
         // Coba Bluetooth printer (sama persis dengan kasir manual)
         if (window.BTPrinter) {
             const connected = await BTPrinter.connect();
             if (connected) {
-                const data = _buildRekapEscPos(list, tglLabel, isAll, salesByMenu);
+                const data = _buildRekapEscPos(list, tglLabel, isAll, salesByKonsMap);
                 // Panggil printData internal via BTPrinter
                 await _printRekapEscPos(data);
                 return;
             }
         }
         // Fallback: window.print() dengan HTML
-        _printRekap(list, tglLabel, isAll, salesByMenu);
+        _printRekap(list, tglLabel, isAll, salesByKonsMap);
     }
 
     /* ── ESC/POS builder rekap (format 58mm, identik struktur kasir manual) ── */
-    function _buildRekapEscPos(list, tglLabel, isAll, salesByMenu) {
+    function _buildRekapEscPos(list, tglLabel, isAll, salesByKonsMap) {
         const ESC = 0x1B, GS = 0x1D;
         const cmd = (...bytes) => new Uint8Array(bytes);
         const ALIGN_CTR  = cmd(ESC, 0x61, 0x01);
@@ -6958,6 +7001,7 @@
 
         list.forEach(k => {
             const detail = k.detail || [];
+            const salesByMenu = (salesByKonsMap || {})[k.id] || {};
             const isPaid = k.is_paid;
             const isDone = k.status === 'retur_done';
             let kMasuk=0, kKasir=0, kOnline=0, kRetur=0, kBayar=0;
@@ -7034,7 +7078,7 @@
     }
 
     /* ── Core: inject ke #rekap-print lalu window.print() ── */
-    function _printRekap(list, tglLabel, isAll, salesByMenu) {
+    function _printRekap(list, tglLabel, isAll, salesByKonsMap) {
         // Kosongkan struk-print agar tidak ikut tercetak
         const struk = document.getElementById('struk-print');
         if (struk) { struk.innerHTML = ''; struk.style.display = 'none'; }
@@ -7045,7 +7089,7 @@
         // Pindahkan #rekap-print ke direct child of body agar @media print bisa sembunyikan semua sibling
         document.body.appendChild(el);
 
-        el.innerHTML = buildStrukRekapKonsinyasi(list, tglLabel, isAll, salesByMenu);
+        el.innerHTML = buildStrukRekapKonsinyasi(list, tglLabel, isAll, salesByKonsMap);
         el.style.display = 'block';
 
         setTimeout(() => {
@@ -7058,7 +7102,7 @@
     }
 
     /* ── Builder HTML konten struk rekap (format 58mm, sama dengan kasir manual) ── */
-    function buildStrukRekapKonsinyasi(list, tglLabel, isAll, salesByMenu) {
+    function buildStrukRekapKonsinyasi(list, tglLabel, isAll, salesByKonsMap) {
         const now  = new Date();
         const tgl  = now.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'});
         const jam  = now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
@@ -7073,6 +7117,7 @@
 
         const mitraBlocks = list.map(k => {
             const detail  = k.detail || [];
+            const salesByMenu = (salesByKonsMap || {})[k.id] || {};
             const isPaid  = k.is_paid === true;
             const isDone  = k.status === 'retur_done';
             let kKasir=0, kOnline=0, kRetur=0;
@@ -8727,6 +8772,13 @@
             edit_unlocked:  false,
             updated_at:     new Date().toISOString()
         };
+        // session_started_at hanya di-set untuk record BARU (mitra belum pernah
+        // input hari ini). Jika ini koreksi/penambahan ke record yang sudah ada,
+        // JANGAN diubah — supaya transaksi yang sudah terjadi sejak sesi berjalan
+        // tetap terhitung di rekap Kasir/Online, tidak dianggap "sesi baru".
+        if (!window._adminStokExistingId) {
+            payload.session_started_at = new Date().toISOString();
+        }
 
         // Jika sudah ada record (edit_unlocked = true), UPDATE. Jika belum, INSERT.
         let dbError;
@@ -8841,8 +8893,11 @@
         switchMdkTab('retur');
 
         // Ambil data penjualan riil (Kasir Manual + Order Online) hari konsinyasi ini,
-        // dipakai untuk rekomendasi angka Retur = Masuk - Terjual Riil
-        const salesByMenu = k.tanggal ? await fetchKonsinyasiSalesData(k.tanggal) : {};
+        // dipakai untuk rekomendasi angka Retur = Masuk - Terjual Riil.
+        // Hanya transaksi SEJAK sesi ini dimulai (session_started_at) yang dihitung,
+        // agar transaksi dari sesi lama (sebelum mitra/admin submit ulang) tidak
+        // ikut tercampur ke rekomendasi retur sesi yang sedang berjalan.
+        const salesByMenu = k.tanggal ? await fetchKonsinyasiSalesData(k.tanggal, k.session_started_at) : {};
 
         // Render lists
         renderMdkReturTab(k, salesByMenu);
