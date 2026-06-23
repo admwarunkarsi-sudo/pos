@@ -3462,6 +3462,9 @@
                     <i class="fa-solid fa-print"></i> Print
                 </button>
                 <button onclick="closeOrderModal()" class="btn btn-ghost">Tutup</button>
+                <button id="modal-btn-proses" class="btn" style="background:linear-gradient(135deg,#d97706,#b45309);color:#fff;display:none;">
+                    <i class="fa-solid fa-fire-burner"></i> Proses
+                </button>
                 <button id="modal-btn-action" class="btn btn-success">
                     <i class="fa-solid fa-check"></i> Selesai &amp; Beri Poin
                 </button>
@@ -4939,7 +4942,7 @@
         const { data: orders, error } = await _supabase
             .from('orders')
             .select('*')
-            .eq('status', 'Antrean')
+            .in('status', ['Antrean', 'Diproses'])
             .order('created_at', { ascending: false });
 
         const container = document.getElementById('kasir-orders-list');
@@ -4994,15 +4997,20 @@
         currentOrdersCache = orders;
         container.innerHTML = orders.map(order => {
             const isReward = order.total_harga === 0 || order.order_id.startsWith('REWARD');
-            // Tandai card pesanan yang belum dibuka dengan visual pulse
             const isUnopened = unopenedOrderIds.has(order.order_id);
+            const isDiproses = order.status === 'Diproses';
+            const cardBorderColor = isDiproses ? 'var(--amber-500)' : isUnopened ? 'var(--red-600)' : '';
+            const cardAnim = (isDiproses || isUnopened) ? 'animation:pulseCard 1.5s infinite;' : '';
+            const statusBadge = isDiproses
+                ? `<span style="background:var(--amber-500);color:#fff;font-size:9px;font-weight:800;padding:2px 8px;border-radius:5px;">DIPROSES</span>`
+                : isUnopened ? `<span style="background:var(--red-600);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;animation:pulse-anim 1s infinite;">BARU</span>` : '';
             return `
-                <div onclick="openOrderModal('${order.order_id}')" class="order-card${isReward ? ' reward' : ''}" style="${isUnopened ? 'border-left-color:var(--red-600);animation:pulseCard 1.5s infinite;' : ''}">
+                <div onclick="openOrderModal('${order.order_id}')" class="order-card${isReward ? ' reward' : ''}" style="${cardBorderColor ? 'border-left-color:' + cardBorderColor + ';' : ''}${cardAnim}">
                     <div>
                         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
                             <span class="order-id-badge${isReward ? ' reward' : ''}">${order.order_id}</span>
                             <span class="order-name">${order.member_name}</span>
-                            ${isUnopened ? `<span style="background:var(--red-600);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;animation:pulse-anim 1s infinite;">BARU</span>` : ''}
+                            ${statusBadge}
                         </div>
                         <div class="order-note">Catatan: ${order.catatan || '—'}</div>
                     </div>
@@ -5088,7 +5096,22 @@
             }
         };
 
+        const prosesBtn = document.getElementById('modal-btn-proses');
         const actionBtn = document.getElementById('modal-btn-action');
+        const isDiproses = order.status === 'Diproses';
+
+        // Tombol Proses: hanya tampil saat status masih Antrean
+        prosesBtn.style.display = isDiproses ? 'none' : 'inline-flex';
+        prosesBtn.onclick = async () => {
+            prosesBtn.disabled = true;
+            prosesBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memproses...';
+            await _supabase.from('orders').update({ status: 'Diproses' }).eq('id', order.id);
+            showToast('🔥 Pesanan sedang diproses!', 'amber');
+            closeOrderModal();
+            fetchOrders();
+        };
+
+        // Tombol Selesai: selalu tampil
         actionBtn.className = `btn ${isReward ? 'btn-reward' : 'btn-success'}`;
         actionBtn.innerHTML = isReward
             ? '<i class="fa-solid fa-gift"></i> Selesai &amp; Berikan'
