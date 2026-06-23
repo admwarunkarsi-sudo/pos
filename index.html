@@ -7240,11 +7240,28 @@
             return;
         }
 
+        // Hanya saat retur DIFINALISASI ("Selesaikan & Kunci") barang ditarik secara
+        // resmi dari rak — stok di Kelola Menu (tabel `menu`) di-nol-kan untuk produk
+        // tersebut, karena sisa yang belum terjual hari ini dianggap sudah diretur.
+        // Saat masih draft (klik "Simpan" saja, belum dikunci), stok kasir TIDAK
+        // disentuh agar admin masih bisa mengoreksi jumlah retur tanpa mempengaruhi
+        // ketersediaan produk di kasir.
+        if (selesai) {
+            try {
+                const stokUpdates = newDetail
+                    .filter(d => d.menu_id)
+                    .map(d => _supabase.from('menu').update({ stok: 0 }).eq('id', d.menu_id));
+                if (stokUpdates.length) await Promise.all(stokUpdates);
+            } catch (e) {
+                console.warn('[pos] Gagal update stok menu setelah retur:', e);
+            }
+        }
+
         // Update local cache
         const idx = _konsinyasiData.findIndex(k => String(k.id) === String(konsId));
         if (idx >= 0) _konsinyasiData[idx] = { ..._konsinyasiData[idx], ...payload };
 
-        showToast(selesai ? '✅ Retur dikunci & laporan finalisasi!' : '✅ Retur berhasil disimpan!', selesai ? 'green' : 'amber');
+        showToast(selesai ? '✅ Retur dikunci & stok kasir otomatis dinolkan!' : '✅ Retur berhasil disimpan!', selesai ? 'green' : 'amber');
         fetchKonsinyasiList();
         fetchKonsinyasiRiwayat();
     }
