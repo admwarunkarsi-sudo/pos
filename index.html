@@ -5472,8 +5472,10 @@
             const imgSrc = m.gambar_url || 'https://img.icons8.com/illustrations/kolor/96/fast-food.png';
 
             // Saat jam operasional: stok 0 = habis juga
+            // KECUALI produk sendiri (non-mitra) → selalu unlimited, cukup cek is_tersedia
+            const _isProdukSendiri = !m.mitra_wa;
             const stokNum = (m.stok !== null && m.stok !== undefined) ? parseInt(m.stok) : null;
-            const stokHabis = jamBuka && stokNum !== null && stokNum === 0;
+            const stokHabis = jamBuka && !_isProdukSendiri && stokNum !== null && stokNum === 0;
             const isHabis = !m.is_tersedia || stokHabis;
 
             // Cek stok flash sale khusus
@@ -5509,9 +5511,10 @@
                 } else {
                     stokBadge = '<span class="stok-realtime ok">FS ' + stokFs + ' pcs</span>';
                 }
-            } else if (stokNum === null) {
-                // Stok tidak di-set (unlimited / pre-order)
-                stokBadge = '<span class="stok-realtime po">∞ PO</span>';
+            } else if (stokNum === null || _isProdukSendiri) {
+                // Stok null = tidak di-set (unlimited / pre-order)
+                // Produk sendiri (non-mitra) = selalu unlimited
+                stokBadge = '<span class="stok-realtime po">∞</span>';
             } else if (stokNum === 0) {
                 stokBadge = '<span class="stok-realtime zero">Stok 0</span>';
             } else if (stokNum <= 5) {
@@ -5556,23 +5559,29 @@
 
     function addToCart(id, nama, harga) {
         // Saat jam operasional: batasi qty sesuai stok real di database
+        // KECUALI produk sendiri (non-mitra) → unlimited, cukup cek is_tersedia
         if (isJamOperasional()) {
             const menuData = currentMenusCache.find(m => m.id === id);
             if (menuData) {
+                const isProdukSendiriCart = !menuData.mitra_wa;
                 const stokNum = (menuData.stok !== null && menuData.stok !== undefined) ? parseInt(menuData.stok) : null;
-                if (stokNum !== null && stokNum === 0) {
-                    showToast('Stok ' + nama + ' sudah habis!', 'amber');
-                    return;
-                }
-                if (stokNum !== null && stokNum > 0) {
-                    const existing = cartItems.find(c => c.id === id);
-                    const qtyDiCart = existing ? existing.qty : 0;
-                    if (qtyDiCart >= stokNum) {
-                        showToast('Stok ' + nama + ' hanya tersisa ' + stokNum + ' pcs.', 'amber');
+
+                if (!isProdukSendiriCart) {
+                    // Produk mitra: cek stok ketat
+                    if (stokNum !== null && stokNum === 0) {
+                        showToast('Stok ' + nama + ' sudah habis!', 'amber');
                         return;
                     }
+                    if (stokNum !== null && stokNum > 0) {
+                        const existing = cartItems.find(c => c.id === id);
+                        const qtyDiCart = existing ? existing.qty : 0;
+                        if (qtyDiCart >= stokNum) {
+                            showToast('Stok ' + nama + ' hanya tersisa ' + stokNum + ' pcs.', 'amber');
+                            return;
+                        }
+                    }
                 }
-                // Cek stok flash sale khusus
+                // Cek stok flash sale khusus (berlaku untuk semua produk)
                 if (menuData.is_flash_sale === 1) {
                     const stokFs = (menuData.stok_flash_sale !== undefined && menuData.stok_flash_sale !== null) ? parseInt(menuData.stok_flash_sale) : null;
                     if (stokFs !== null && stokFs === 0) {
@@ -5674,10 +5683,11 @@
         if (!item) return;
         if (num <= 0) { cartItems.splice(cartItems.findIndex(c=>c.id===id), 1); }
         else {
-            // Cek stok saat jam operasional
+            // Cek stok saat jam operasional — KECUALI produk sendiri (non-mitra) = unlimited
             if (isJamOperasional()) {
                 const menuData = currentMenusCache.find(m => m.id === id);
-                if (menuData) {
+                if (menuData && menuData.mitra_wa) {
+                    // Hanya batasi stok untuk produk mitra konsinyasi
                     const stokNum = (menuData.stok !== null && menuData.stok !== undefined) ? parseInt(menuData.stok) : null;
                     if (stokNum !== null && num > stokNum) {
                         showToast('Stok ' + item.nama + ' hanya ' + stokNum + ' pcs!', 'amber');
@@ -5955,31 +5965,37 @@
             try {
                 let menuId = null;
                 let stokSaatIni = null;
+                let mitraWa = null;
 
                 if (item.menu_id) {
                     // Order baru: langsung pakai menu_id (akurat, tidak perlu query by nama)
                     const { data: menuData } = await _supabase
                         .from('menu')
-                        .select('id, stok')
+                        .select('id, stok, mitra_wa')
                         .eq('id', item.menu_id)
                         .maybeSingle();
                     if (!menuData) continue;
                     menuId = menuData.id;
                     stokSaatIni = menuData.stok;
+                    mitraWa = menuData.mitra_wa;
                 } else {
                     // Order lama (belum punya menu_id): fallback ke query by nama
                     const { data: menuData } = await _supabase
                         .from('menu')
-                        .select('id, stok')
+                        .select('id, stok, mitra_wa')
                         .eq('nama', item.nama)
                         .maybeSingle();
                     if (!menuData) continue;
                     menuId = menuData.id;
                     stokSaatIni = menuData.stok;
+                    mitraWa = menuData.mitra_wa;
                 }
 
-                // Skip jika stok null (artinya unlimited/pre-order — tidak perlu dikurangi)
+                // Skip jika stok null (unlimited/pre-order — tidak perlu dikurangi)
                 if (stokSaatIni === null || stokSaatIni === undefined) continue;
+
+                // Skip jika produk sendiri (non-mitra) — stoknya unlimited, tidak perlu dikurangi
+                if (!mitraWa) continue;
 
                 const stokBaru = Math.max(0, (parseInt(stokSaatIni) || 0) - (item.qty || 1));
                 await _supabase.from('menu').update({ stok: stokBaru }).eq('id', menuId);
