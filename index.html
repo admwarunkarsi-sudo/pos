@@ -2312,7 +2312,7 @@
                 <i class="fa-solid fa-display"></i> Tampilan Web
             </button>
             <button onclick="switchTab('riwayat')" id="tab-riwayat" class="tab-btn inactive">
-                <i class="fa-solid fa-clock-rotate-left"></i> Riwayat Order
+                <i class="fa-solid fa-wallet"></i> Pengeluaran
             </button>
         </div>
         <button onclick="bukaMenuAkunAdmin()" id="btn-akun-admin" class="tab-btn inactive" style="position:relative;flex-shrink:0;">
@@ -2555,6 +2555,12 @@
             <div class="stat-card-value" id="stat-poin">0</div>
             <div class="stat-card-label">Total Poin Beredar</div>
             <div class="stat-card-sub">Seluruh member</div>
+        </div>
+        <div class="stat-card" style="border:2px solid #bbf7d0;background:linear-gradient(135deg,#f0fdf4,#dcfce7);">
+            <div class="stat-card-icon" style="background:linear-gradient(135deg,var(--green-600),var(--green-700));color:#fff;"><i class="fa-solid fa-sack-dollar"></i></div>
+            <div class="stat-card-value" id="stat-laba-bersih" style="color:var(--green-700);">Rp 0</div>
+            <div class="stat-card-label" style="color:var(--green-800);font-weight:800;">Est. Keuntungan Bersih</div>
+            <div class="stat-card-sub" id="stat-laba-detail" style="color:var(--green-600);">Omset − HPP − Pengeluaran</div>
         </div>
     </div>
 
@@ -3207,105 +3213,143 @@
 </div>
 </div>
 
-<!-- ─── PANEL RIWAYAT ORDER ─── -->
+<!-- ─── PANEL PENGELUARAN ─── -->
 <div id="panel-riwayat" class="hidden" style="padding:0 0 16px;">
 <div style="max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:16px;">
 
-    <!-- Filter Bar -->
+    <!-- Filter & Aksi Bar -->
     <div class="card">
         <div class="card-header" style="flex-wrap:wrap;gap:10px;">
-            <span class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Riwayat Order</span>
+            <span class="card-title"><i class="fa-solid fa-wallet" style="color:#7c3aed;"></i> Pengeluaran</span>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                <button class="filter-btn active" id="riwayat-btn-hari" onclick="setRiwayatFilter('hari')">Hari Ini</button>
-                <button class="filter-btn" id="riwayat-btn-minggu" onclick="setRiwayatFilter('minggu')">7 Hari</button>
-                <button class="filter-btn" id="riwayat-btn-bulan" onclick="setRiwayatFilter('bulan')">30 Hari</button>
+                <button class="filter-btn active" id="pengeluaran-btn-hari" onclick="setPengeluaranFilter('hari')">Hari Ini</button>
+                <button class="filter-btn" id="pengeluaran-btn-minggu" onclick="setPengeluaranFilter('minggu')">7 Hari</button>
+                <button class="filter-btn" id="pengeluaran-btn-bulan" onclick="setPengeluaranFilter('bulan')">30 Hari</button>
                 <div style="display:flex;align-items:center;gap:6px;">
-                    <input type="date" id="riwayat-tgl-dari" class="form-input" style="width:140px;font-size:11px;" onchange="setRiwayatFilter('custom')">
+                    <input type="date" id="pengeluaran-tgl-dari" class="form-input" style="width:140px;font-size:11px;" onchange="setPengeluaranFilter('custom')">
                     <span style="font-size:11px;color:var(--gray-400);">s/d</span>
-                    <input type="date" id="riwayat-tgl-sampai" class="form-input" style="width:140px;font-size:11px;" onchange="setRiwayatFilter('custom')">
+                    <input type="date" id="pengeluaran-tgl-sampai" class="form-input" style="width:140px;font-size:11px;" onchange="setPengeluaranFilter('custom')">
                 </div>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                <div class="search-wrap" style="min-width:160px;">
-                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                    <input type="text" id="riwayat-search" class="search-input" placeholder="Cari nama/order..." oninput="filterRiwayatTable()">
-                </div>
-                <select id="riwayat-filter-metode" class="form-input" style="width:130px;font-size:11px;" onchange="filterRiwayatTable()">
-                    <option value="">Semua Metode</option>
-                    <option value="tunai">Tunai</option>
-                    <option value="transfer">Transfer</option>
-                    <option value="qris">QRIS</option>
-                    <option value="dp">DP/Pre-Order</option>
-                </select>
-                <select id="riwayat-filter-tipe" class="form-input" style="width:130px;font-size:11px;" onchange="filterRiwayatTable()">
-                    <option value="">Semua Tipe</option>
-                    <option value="kasir">Kasir Manual</option>
-                    <option value="online">Online/Member</option>
-                </select>
-                <button onclick="fetchRiwayatOrder()" class="btn btn-sm" style="background:var(--green-100);color:var(--green-700);"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+                <button onclick="fetchPengeluaran()" class="btn btn-sm" style="background:var(--green-100);color:var(--green-700);"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+                <button onclick="bukaModalTambahPengeluaran()" class="btn btn-sm" style="background:#7c3aed;color:#fff;font-size:11px;padding:6px 14px;border-radius:6px;"><i class="fa-solid fa-plus"></i> Tambah Pengeluaran</button>
             </div>
         </div>
     </div>
 
     <!-- Summary Cards -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;" id="riwayat-summary-cards">
-        <div class="card" style="padding:14px 16px;text-align:center;">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);">Total Order</div>
-            <div id="riwayat-sum-total" style="font-family:var(--font-mono);font-size:22px;font-weight:800;color:var(--gray-800);margin-top:4px;">0</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
+        <div class="card" style="padding:16px;text-align:center;">
+            <div style="width:36px;height:36px;border-radius:10px;background:#f3e8ff;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;"><i class="fa-solid fa-arrow-trend-down" style="color:#7c3aed;font-size:14px;"></i></div>
+            <div id="pengeluaran-sum-total" style="font-family:var(--font-mono);font-size:18px;font-weight:800;color:#7c3aed;">Rp 0</div>
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);margin-top:4px;">Total Pengeluaran</div>
         </div>
-        <div class="card" style="padding:14px 16px;text-align:center;">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);">Total Pendapatan</div>
-            <div id="riwayat-sum-pendapatan" style="font-family:var(--font-mono);font-size:18px;font-weight:800;color:var(--green-700);margin-top:4px;">Rp 0</div>
+        <div class="card" style="padding:16px;text-align:center;">
+            <div style="width:36px;height:36px;border-radius:10px;background:var(--green-100);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;"><i class="fa-solid fa-receipt" style="color:var(--green-700);font-size:14px;"></i></div>
+            <div id="pengeluaran-sum-count" style="font-family:var(--font-mono);font-size:24px;font-weight:800;color:var(--gray-800);">0</div>
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);margin-top:4px;">Jumlah Transaksi</div>
         </div>
-        <div class="card" style="padding:14px 16px;text-align:center;">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);">Rata-rata Order</div>
-            <div id="riwayat-sum-avg" style="font-family:var(--font-mono);font-size:18px;font-weight:800;color:#1d4ed8;margin-top:4px;">Rp 0</div>
+        <div class="card" style="padding:16px;text-align:center;">
+            <div style="width:36px;height:36px;border-radius:10px;background:var(--amber-100);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;"><i class="fa-solid fa-tag" style="color:var(--amber-600);font-size:14px;"></i></div>
+            <div id="pengeluaran-sum-kategori-top" style="font-family:var(--font-mono);font-size:13px;font-weight:800;color:var(--amber-600);">—</div>
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);margin-top:4px;">Kategori Terbanyak</div>
         </div>
-        <div class="card" style="padding:14px 16px;text-align:center;">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);">Order Kasir</div>
-            <div id="riwayat-sum-kasir" style="font-family:var(--font-mono);font-size:22px;font-weight:800;color:var(--amber-600);margin-top:4px;">0</div>
-        </div>
-        <div class="card" style="padding:14px 16px;text-align:center;">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);">Order Online</div>
-            <div id="riwayat-sum-online" style="font-family:var(--font-mono);font-size:22px;font-weight:800;color:var(--green-700);margin-top:4px;">0</div>
-        </div>
-        <div class="card" style="padding:14px 16px;text-align:center;">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--red-600);">Dibatalkan</div>
-            <div id="riwayat-sum-batal" style="font-family:var(--font-mono);font-size:22px;font-weight:800;color:var(--red-600);margin-top:4px;">0</div>
+        <div class="card" style="padding:16px;text-align:center;">
+            <div style="width:36px;height:36px;border-radius:10px;background:var(--amber-50);display:flex;align-items:center;justify-content:center;margin:0 auto 8px;"><i class="fa-solid fa-chart-simple" style="color:var(--amber-600);font-size:14px;"></i></div>
+            <div id="pengeluaran-sum-rata" style="font-family:var(--font-mono);font-size:16px;font-weight:800;color:var(--amber-600);">Rp 0</div>
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);margin-top:4px;">Rata-rata/Transaksi</div>
         </div>
     </div>
 
-    <!-- Tabel Riwayat -->
+    <!-- Tabel Pengeluaran -->
     <div class="card" style="overflow:hidden;">
-        <div id="riwayat-loading" style="display:none;text-align:center;padding:32px 0;">
+        <div id="pengeluaran-loading" style="display:none;text-align:center;padding:32px 0;">
             <div class="spinner" style="margin:0 auto;"></div>
-            <div style="font-size:12px;color:var(--gray-400);margin-top:8px;">Memuat riwayat order...</div>
+            <div style="font-size:12px;color:var(--gray-400);margin-top:8px;">Memuat data pengeluaran...</div>
         </div>
-        <div id="riwayat-empty" class="empty-state hidden">
-            <i class="fa-solid fa-folder-open"></i>
-            <p>Tidak ada order dalam rentang waktu ini.</p>
+        <div id="pengeluaran-empty" class="empty-state hidden">
+            <i class="fa-solid fa-wallet"></i>
+            <p>Belum ada pengeluaran dalam periode ini.</p>
+            <button onclick="bukaModalTambahPengeluaran()" class="btn btn-sm" style="margin-top:12px;background:#7c3aed;color:#fff;padding:9px 18px;font-size:12px;">
+                <i class="fa-solid fa-plus"></i> Tambah Pengeluaran Pertama
+            </button>
         </div>
-        <div id="riwayat-table-wrap" style="display:none;overflow-x:auto;">
+        <div id="pengeluaran-table-wrap" style="display:none;overflow-x:auto;">
             <table class="data-table" style="table-layout:auto;">
                 <thead>
                     <tr>
-                        <th style="width:110px;">Order ID</th>
-                        <th style="width:80px;">Waktu</th>
-                        <th>Pelanggan</th>
-                        <th style="width:80px;">Tipe</th>
-                        <th>Item Dipesan</th>
-                        <th style="width:80px;">Metode</th>
-                        <th style="width:100px;text-align:right;">Total</th>
-                        <th style="width:80px;text-align:center;">Status</th>
+                        <th style="width:90px;">Tanggal</th>
+                        <th>Keterangan</th>
+                        <th style="width:120px;">Kategori</th>
+                        <th style="width:120px;text-align:right;">Jumlah</th>
                         <th style="width:60px;text-align:center;">Aksi</th>
                     </tr>
                 </thead>
-                <tbody id="riwayat-tbody"></tbody>
+                <tbody id="pengeluaran-tbody"></tbody>
             </table>
         </div>
     </div>
 
 </div>
+</div>
+
+<!-- ─── MODAL TAMBAH/EDIT PENGELUARAN ─── -->
+<div id="modal-pengeluaran" class="modal-overlay" style="z-index:9200;">
+    <div class="modal-box" style="max-width:440px;width:95%;">
+        <div class="modal-header" style="background:linear-gradient(135deg,#5b21b6,#7c3aed);">
+            <div class="modal-header-title">
+                <span id="pengeluaran-modal-badge" class="modal-order-id-badge">Baru</span>
+                <div class="modal-member-name" id="pengeluaran-modal-title"><i class="fa-solid fa-wallet" style="font-size:13px;margin-right:6px;"></i>Tambah Pengeluaran</div>
+            </div>
+            <button onclick="tutupModalPengeluaran()" class="modal-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" style="gap:14px;">
+            <input type="hidden" id="pengeluaran-edit-id" value="">
+            <div>
+                <label class="form-label">Tanggal <span style="color:var(--red-600);">*</span></label>
+                <input type="date" id="pengeluaran-tanggal" class="form-input">
+            </div>
+            <div>
+                <label class="form-label">Keterangan <span style="color:var(--red-600);">*</span></label>
+                <input type="text" id="pengeluaran-keterangan" class="form-input" placeholder="Cth: Beli gas, belanja bahan, dll.">
+            </div>
+            <div class="form-grid-2">
+                <div>
+                    <label class="form-label">Kategori</label>
+                    <select id="pengeluaran-kategori" class="form-input form-select">
+                        <option value="Operasional">Operasional</option>
+                        <option value="Bahan Baku">Bahan Baku</option>
+                        <option value="Gaji/Upah">Gaji / Upah</option>
+                        <option value="Utilitas">Utilitas (Listrik/Air/Gas)</option>
+                        <option value="Peralatan">Peralatan</option>
+                        <option value="Marketing">Marketing / Promosi</option>
+                        <option value="Lain-lain">Lain-lain</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Jumlah (Rp) <span style="color:var(--red-600);">*</span></label>
+                    <input type="number" id="pengeluaran-jumlah" class="form-input" placeholder="0" min="0">
+                </div>
+            </div>
+            <div>
+                <label class="form-label">Catatan <span style="font-weight:400;color:var(--gray-400);">(opsional)</span></label>
+                <textarea id="pengeluaran-catatan" rows="2" class="form-input form-textarea" placeholder="Catatan tambahan..."></textarea>
+            </div>
+            <div id="pengeluaran-modal-error" style="display:none;background:var(--red-100);border:1px solid #fecaca;border-radius:8px;padding:9px 12px;font-size:12px;font-weight:600;color:var(--red-600);">
+                <i class="fa-solid fa-circle-exclamation"></i> <span id="pengeluaran-modal-error-text"></span>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button id="pengeluaran-btn-hapus" onclick="hapusPengeluaran()" class="btn btn-danger" style="display:none;font-size:11px;padding:8px 12px;">
+                <i class="fa-solid fa-trash"></i> Hapus
+            </button>
+            <div class="modal-footer-right">
+                <button onclick="tutupModalPengeluaran()" class="btn btn-ghost">Batal</button>
+                <button onclick="simpanPengeluaran()" class="btn btn-primary" style="background:#7c3aed;width:auto;padding:9px 20px;">
+                    <i class="fa-solid fa-floppy-disk"></i> Simpan
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- ─── PANEL CHAT ─── -->
@@ -3879,7 +3923,7 @@
             // Hapus dot notifikasi edit request saat panel konsinyasi dibuka
             document.querySelectorAll('.edit-req-dot').forEach(d => d.remove());
         }
-        if (tab === 'riwayat') fetchRiwayatOrder();
+        if (tab === 'riwayat') fetchPengeluaran();
     }
 
     async function loadTokoSettings() {
@@ -4422,6 +4466,8 @@
             const stokTerkunci = _isStokTerkunci(m.mitra_wa);
             const sumberKunci = lockInfo && lockInfo.diinput_admin ? 'Admin · Halaman Konsinyasi' : 'Mitra · Halaman Member';
 
+            // Produk sendiri (non-mitra): tampilkan UNLIMITED, admin bisa ubah via status Ready/Habis
+            const isProdukSendiri = !m.mitra_wa;
             const stokCellHtml = stokTerkunci ? `
                    <div class="stok-locked-wrap" title="Stok terkunci otomatis — sudah diupdate hari ini oleh ${sumberKunci}. Pengurangan stok berjalan otomatis dari transaksi Kasir/Order Online/Retur. Klik tombol di bawah untuk buka kunci & koreksi manual jika perlu.">
                         <div class="stok-ctrl">
@@ -4434,6 +4480,13 @@
                             <i class="fa-solid fa-lock"></i> ${sumberKunci}
                         </div>
                         <button type="button" onclick="bukaKonsinyasiUntukMitra('${m.mitra_wa}')" style="margin-top:3px;font-size:8px;background:none;border:none;color:#2563eb;text-decoration:underline;cursor:pointer;padding:0;">Buka Kunci di Konsinyasi</button>
+                   </div>` : isProdukSendiri ? `
+                   <div style="text-align:center;">
+                        <div style="display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#dcfce7,#bbf7d0);border:1px solid #86efac;border-radius:6px;padding:4px 10px;font-size:9px;font-weight:800;color:var(--green-700);">
+                            <i class="fa-solid fa-infinity"></i> Unlimited
+                        </div>
+                        <div style="margin-top:3px;font-size:8px;color:var(--gray-400);">Atur via Ready/Habis</div>
+                        <input type="hidden" id="stok-${m.id}" value="99999">
                    </div>` : `<div class="stok-ctrl">
                         <button onclick="adjStok('${m.id}',-1)" class="stok-adj-btn">−</button>
                         <input type="number" id="stok-${m.id}" value="${stok}" placeholder="0" class="tbl-input-num-sm" min="0" oninput="updateStokBadge('${m.id}')">
@@ -4857,8 +4910,12 @@
         // atau Halaman Konsinyasi), abaikan nilai stok dari DOM (input seharusnya disabled)
         // dan pakai nilai stok yang sudah tersimpan agar tidak tertimpa secara tidak sengaja.
         const mCacheAwal = currentMenusCache.find(x => x.id === id);
-        const terkunci   = _isStokTerkunci(mCacheAwal?.mitra_wa);
-        const stok       = terkunci ? (parseInt(mCacheAwal?.stok) || 0) : (parseInt(document.getElementById(`stok-${id}`).value) || 0);
+        const terkunci         = _isStokTerkunci(mCacheAwal?.mitra_wa);
+        const isProdukSendiriSave = !mCacheAwal?.mitra_wa;
+        // Produk sendiri: stok tetap dari DB (unlimited — tidak di-overwrite nilai sementara)
+        const stok       = (terkunci || isProdukSendiriSave)
+            ? (parseInt(mCacheAwal?.stok) || 0)
+            : (parseInt(document.getElementById(`stok-${id}`).value) || 0);
 
         const updatePayload = { nama, kategori, gambar_url, harga_normal, harga_beli, harga_flash_sale, is_flash_sale, is_tersedia, stok };
 
@@ -6253,6 +6310,38 @@
         document.getElementById('stat-transaksi-sub').textContent = currentLaporanFilter === 'hari' ? 'Hari ini' : '';
         document.getElementById('stat-member').textContent = totalMember;
         document.getElementById('stat-poin').textContent = totalPoin.toLocaleString('id-ID');
+
+        // ── Estimasi Keuntungan Bersih ──
+        // 1. HPP: hitung dari item yang terjual × harga_beli produk
+        let totalHPP = 0;
+        (orders||[]).forEach(o => {
+            (o.detail_items||[]).forEach(item => {
+                const menuData = currentMenusCache.find(m => m.nama === item.nama);
+                if (menuData && menuData.harga_beli > 0) {
+                    totalHPP += menuData.harga_beli * item.qty;
+                }
+            });
+        });
+        // 2. Pengeluaran: ambil dari tabel pengeluaran sesuai filter
+        let totalPengeluaran = 0;
+        try {
+            const lapRange = getLaporanDateRange();
+            let pengeluaranQuery = _supabase.from('pengeluaran').select('jumlah');
+            if (lapRange) pengeluaranQuery = pengeluaranQuery.gte('tanggal', lapRange.from.slice(0,10)).lte('tanggal', lapRange.to.slice(0,10));
+            const { data: pengeluaranData } = await pengeluaranQuery;
+            totalPengeluaran = (pengeluaranData||[]).reduce((s,r) => s + (parseInt(r.jumlah)||0), 0);
+        } catch(e) { /* tabel pengeluaran mungkin belum ada */ }
+        // 3. Hitung laba bersih
+        const labaBersih = totalOmset - totalHPP - totalPengeluaran;
+        const labaEl  = document.getElementById('stat-laba-bersih');
+        const labaDetailEl = document.getElementById('stat-laba-detail');
+        if (labaEl) {
+            labaEl.textContent = 'Rp ' + labaBersih.toLocaleString('id-ID');
+            labaEl.style.color = labaBersih >= 0 ? 'var(--green-700)' : 'var(--red-600)';
+        }
+        if (labaDetailEl) {
+            labaDetailEl.innerHTML = `<span style="font-size:9px;">Omset <b>Rp ${totalOmset.toLocaleString('id-ID')}</b> − HPP <b>Rp ${totalHPP.toLocaleString('id-ID')}</b> − Pengeluaran <b>Rp ${totalPengeluaran.toLocaleString('id-ID')}</b></span>`;
+        }
 
         // Render table
         const tbody = document.getElementById('laporan-tbody');
@@ -9803,6 +9892,240 @@ function _badgeStatus(s) {
 function _esc(str) {
     return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+// ══════════════════════════════════════════════════════════════
+// PENGELUARAN — Modul catat & tampilkan pengeluaran operasional
+// ══════════════════════════════════════════════════════════════
+
+let _pengeluaranAllData = [];
+let _pengeluaranFilter  = 'hari';
+
+function setPengeluaranFilter(filter) {
+    _pengeluaranFilter = filter;
+    ['hari','minggu','bulan'].forEach(f => {
+        const btn = document.getElementById(`pengeluaran-btn-${f}`);
+        if (btn) btn.classList.toggle('active', f === filter);
+    });
+    fetchPengeluaran();
+}
+
+function _getPengeluaranDateRange() {
+    const now = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    if (_pengeluaranFilter === 'hari') {
+        const today = fmt(now);
+        return { from: today, to: today };
+    }
+    if (_pengeluaranFilter === 'minggu') {
+        const d7 = new Date(now); d7.setDate(d7.getDate() - 6);
+        return { from: fmt(d7), to: fmt(now) };
+    }
+    if (_pengeluaranFilter === 'bulan') {
+        const d30 = new Date(now); d30.setDate(d30.getDate() - 29);
+        return { from: fmt(d30), to: fmt(now) };
+    }
+    if (_pengeluaranFilter === 'custom') {
+        const dari = document.getElementById('pengeluaran-tgl-dari')?.value;
+        const sampai = document.getElementById('pengeluaran-tgl-sampai')?.value;
+        if (dari && sampai) return { from: dari, to: sampai };
+    }
+    return null;
+}
+
+async function fetchPengeluaran() {
+    const loadingEl = document.getElementById('pengeluaran-loading');
+    const emptyEl   = document.getElementById('pengeluaran-empty');
+    const wrapEl    = document.getElementById('pengeluaran-table-wrap');
+    const tbody     = document.getElementById('pengeluaran-tbody');
+    if (!tbody) return;
+
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (emptyEl) emptyEl.classList.add('hidden');
+    if (wrapEl)  wrapEl.style.display = 'none';
+
+    try {
+        let query = _supabase.from('pengeluaran').select('*').order('tanggal', { ascending: false }).order('created_at', { ascending: false });
+        const range = _getPengeluaranDateRange();
+        if (range) query = query.gte('tanggal', range.from).lte('tanggal', range.to);
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        _pengeluaranAllData = data || [];
+        _renderPengeluaranTable(_pengeluaranAllData);
+        _renderPengeluaranSummary(_pengeluaranAllData);
+    } catch(err) {
+        console.error('[pengeluaran] fetchPengeluaran error:', err);
+        if (err.message && err.message.includes('pengeluaran')) {
+            // Tabel belum ada — beri petunjuk SQL
+            if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--amber-600);font-size:12px;">
+                <i class="fa-solid fa-triangle-exclamation" style="font-size:20px;display:block;margin-bottom:8px;"></i>
+                Tabel <strong>pengeluaran</strong> belum ada di database.<br>
+                <span style="font-size:10px;color:var(--gray-400);margin-top:6px;display:block;">
+                    Jalankan SQL berikut di Supabase SQL Editor:<br>
+                    <code style="background:var(--gray-100);padding:4px 8px;border-radius:4px;display:inline-block;margin-top:4px;font-size:10px;">
+                        CREATE TABLE pengeluaran (id bigserial primary key, tanggal date not null, keterangan text not null, kategori text default 'Lain-lain', jumlah bigint not null default 0, catatan text, created_at timestamptz default now());
+                    </code>
+                </span>
+            </td></tr>`;
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (wrapEl) wrapEl.style.display = 'block';
+        } else {
+            showToast('Gagal memuat pengeluaran: ' + (err.message || ''), 'amber');
+            if (loadingEl) loadingEl.style.display = 'none';
+        }
+        return;
+    }
+
+    if (loadingEl) loadingEl.style.display = 'none';
+}
+
+function _renderPengeluaranSummary(data) {
+    const total  = data.reduce((s,r) => s + (parseInt(r.jumlah)||0), 0);
+    const count  = data.length;
+    const avg    = count ? Math.round(total / count) : 0;
+
+    // Kategori terbanyak
+    const katMap = {};
+    data.forEach(r => { const k = r.kategori || 'Lain-lain'; katMap[k] = (katMap[k]||0) + (parseInt(r.jumlah)||0); });
+    const topKat = Object.entries(katMap).sort((a,b)=>b[1]-a[1])[0];
+
+    const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setTxt('pengeluaran-sum-total',       'Rp ' + total.toLocaleString('id-ID'));
+    setTxt('pengeluaran-sum-count',       count);
+    setTxt('pengeluaran-sum-kategori-top', topKat ? topKat[0] : '—');
+    setTxt('pengeluaran-sum-rata',        'Rp ' + avg.toLocaleString('id-ID'));
+}
+
+function _renderPengeluaranTable(data) {
+    const loadingEl = document.getElementById('pengeluaran-loading');
+    const emptyEl   = document.getElementById('pengeluaran-empty');
+    const wrapEl    = document.getElementById('pengeluaran-table-wrap');
+    const tbody     = document.getElementById('pengeluaran-tbody');
+    if (!tbody) return;
+
+    if (loadingEl) loadingEl.style.display = 'none';
+
+    if (!data.length) {
+        if (emptyEl) emptyEl.classList.remove('hidden');
+        if (wrapEl) wrapEl.style.display = 'none';
+        return;
+    }
+
+    if (emptyEl) emptyEl.classList.add('hidden');
+    if (wrapEl) wrapEl.style.display = 'block';
+
+    tbody.innerHTML = data.map(r => {
+        const tgl    = r.tanggal ? new Date(r.tanggal + 'T00:00:00').toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—';
+        const jumlah = parseInt(r.jumlah) || 0;
+        const katColor = {
+            'Bahan Baku':'var(--green-700)', 'Operasional':'#1d4ed8',
+            'Gaji/Upah':'#7c3aed', 'Utilitas':'var(--amber-600)',
+            'Peralatan':'var(--gray-600)', 'Marketing':'#db2777'
+        }[r.kategori] || 'var(--gray-500)';
+        return `<tr style="border-bottom:1px solid var(--gray-100);">
+            <td style="padding:10px 8px;font-size:11px;color:var(--gray-500);white-space:nowrap;">${tgl}</td>
+            <td style="padding:10px 8px;font-weight:600;font-size:12px;color:var(--gray-800);">
+                ${_esc(r.keterangan)}
+                ${r.catatan ? `<div style="font-size:10px;color:var(--gray-400);margin-top:1px;">${_esc(r.catatan)}</div>` : ''}
+            </td>
+            <td style="padding:10px 8px;">
+                <span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:99px;background:var(--gray-100);color:${katColor};">${_esc(r.kategori||'—')}</span>
+            </td>
+            <td style="padding:10px 8px;text-align:right;font-family:var(--font-mono);font-weight:800;font-size:12px;color:#7c3aed;">
+                Rp ${jumlah.toLocaleString('id-ID')}
+            </td>
+            <td style="padding:10px 8px;text-align:center;">
+                <button onclick="bukaEditPengeluaran('${r.id}')"
+                    class="btn btn-sm"
+                    style="font-size:10px;padding:4px 8px;background:#f3e8ff;color:#7c3aed;border:1px solid #ddd6fe;">
+                    <i class="fa-solid fa-pen"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function bukaModalTambahPengeluaran() {
+    const today = _todayWIB();
+    document.getElementById('pengeluaran-edit-id').value = '';
+    document.getElementById('pengeluaran-tanggal').value = today;
+    document.getElementById('pengeluaran-keterangan').value = '';
+    document.getElementById('pengeluaran-kategori').value = 'Operasional';
+    document.getElementById('pengeluaran-jumlah').value = '';
+    document.getElementById('pengeluaran-catatan').value = '';
+    document.getElementById('pengeluaran-modal-title').innerHTML = '<i class="fa-solid fa-plus" style="font-size:13px;margin-right:6px;"></i>Tambah Pengeluaran';
+    document.getElementById('pengeluaran-modal-badge').textContent = 'Baru';
+    document.getElementById('pengeluaran-btn-hapus').style.display = 'none';
+    document.getElementById('pengeluaran-modal-error').style.display = 'none';
+    document.getElementById('modal-pengeluaran').classList.add('open');
+}
+
+function bukaEditPengeluaran(id) {
+    const r = _pengeluaranAllData.find(x => String(x.id) === String(id));
+    if (!r) return;
+    document.getElementById('pengeluaran-edit-id').value = r.id;
+    document.getElementById('pengeluaran-tanggal').value = r.tanggal || _todayWIB();
+    document.getElementById('pengeluaran-keterangan').value = r.keterangan || '';
+    document.getElementById('pengeluaran-kategori').value = r.kategori || 'Operasional';
+    document.getElementById('pengeluaran-jumlah').value = r.jumlah || '';
+    document.getElementById('pengeluaran-catatan').value = r.catatan || '';
+    document.getElementById('pengeluaran-modal-title').innerHTML = '<i class="fa-solid fa-pen" style="font-size:13px;margin-right:6px;"></i>Edit Pengeluaran';
+    document.getElementById('pengeluaran-modal-badge').textContent = '#' + r.id;
+    document.getElementById('pengeluaran-btn-hapus').style.display = 'inline-flex';
+    document.getElementById('pengeluaran-modal-error').style.display = 'none';
+    document.getElementById('modal-pengeluaran').classList.add('open');
+}
+
+function tutupModalPengeluaran() {
+    document.getElementById('modal-pengeluaran').classList.remove('open');
+}
+
+async function simpanPengeluaran() {
+    const id          = document.getElementById('pengeluaran-edit-id').value;
+    const tanggal     = document.getElementById('pengeluaran-tanggal').value;
+    const keterangan  = document.getElementById('pengeluaran-keterangan').value.trim();
+    const kategori    = document.getElementById('pengeluaran-kategori').value;
+    const jumlah      = parseInt(document.getElementById('pengeluaran-jumlah').value) || 0;
+    const catatan     = document.getElementById('pengeluaran-catatan').value.trim();
+    const errBox      = document.getElementById('pengeluaran-modal-error');
+    const errTxt      = document.getElementById('pengeluaran-modal-error-text');
+
+    const showErr = (msg) => { errTxt.textContent = msg; errBox.style.display = 'flex'; };
+    errBox.style.display = 'none';
+
+    if (!tanggal) { showErr('Tanggal wajib diisi.'); return; }
+    if (!keterangan) { showErr('Keterangan wajib diisi.'); return; }
+    if (jumlah <= 0) { showErr('Jumlah harus lebih dari 0.'); return; }
+
+    const payload = { tanggal, keterangan, kategori, jumlah, catatan };
+
+    let error;
+    if (id) {
+        ({ error } = await _supabase.from('pengeluaran').update(payload).eq('id', id));
+    } else {
+        ({ error } = await _supabase.from('pengeluaran').insert(payload));
+    }
+
+    if (error) { showErr('Gagal simpan: ' + (error.message || 'coba lagi')); return; }
+
+    tutupModalPengeluaran();
+    showToast(id ? '✅ Pengeluaran berhasil diupdate!' : '✅ Pengeluaran berhasil ditambahkan!');
+    fetchPengeluaran();
+}
+
+async function hapusPengeluaran() {
+    const id = document.getElementById('pengeluaran-edit-id').value;
+    if (!id) return;
+    if (!confirm('Yakin ingin menghapus data pengeluaran ini?')) return;
+    const { error } = await _supabase.from('pengeluaran').delete().eq('id', id);
+    if (error) { showToast('Gagal hapus: ' + (error.message||''), 'amber'); return; }
+    tutupModalPengeluaran();
+    showToast('🗑️ Pengeluaran dihapus!', 'amber');
+    fetchPengeluaran();
+}
+
 </script>
 <!-- ─── MODAL DETAIL TRANSAKSI LAPORAN ─── -->
 <div id="modal-laporan-detail" class="modal-overlay" style="z-index:9100;">
