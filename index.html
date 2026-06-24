@@ -2311,6 +2311,9 @@
             <button onclick="switchTab('tampilan')" id="tab-tampilan" class="tab-btn inactive">
                 <i class="fa-solid fa-display"></i> Tampilan Web
             </button>
+            <button onclick="switchTab('riwayat')" id="tab-riwayat" class="tab-btn inactive">
+                <i class="fa-solid fa-clock-rotate-left"></i> Riwayat Order
+            </button>
         </div>
         <button onclick="bukaMenuAkunAdmin()" id="btn-akun-admin" class="tab-btn inactive" style="position:relative;flex-shrink:0;">
             <i class="fa-solid fa-user-shield"></i> Akun
@@ -3204,6 +3207,107 @@
 </div>
 </div>
 
+<!-- ─── PANEL RIWAYAT ORDER ─── -->
+<div id="panel-riwayat" class="hidden" style="padding:0 0 16px;">
+<div style="max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:16px;">
+
+    <!-- Filter Bar -->
+    <div class="card">
+        <div class="card-header" style="flex-wrap:wrap;gap:10px;">
+            <span class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Riwayat Order</span>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="filter-btn active" id="riwayat-btn-hari" onclick="setRiwayatFilter('hari')">Hari Ini</button>
+                <button class="filter-btn" id="riwayat-btn-minggu" onclick="setRiwayatFilter('minggu')">7 Hari</button>
+                <button class="filter-btn" id="riwayat-btn-bulan" onclick="setRiwayatFilter('bulan')">30 Hari</button>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <input type="date" id="riwayat-tgl-dari" class="form-input" style="width:140px;font-size:11px;" onchange="setRiwayatFilter('custom')">
+                    <span style="font-size:11px;color:var(--gray-400);">s/d</span>
+                    <input type="date" id="riwayat-tgl-sampai" class="form-input" style="width:140px;font-size:11px;" onchange="setRiwayatFilter('custom')">
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <div class="search-wrap" style="min-width:160px;">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                    <input type="text" id="riwayat-search" class="search-input" placeholder="Cari nama/order..." oninput="filterRiwayatTable()">
+                </div>
+                <select id="riwayat-filter-metode" class="form-input" style="width:130px;font-size:11px;" onchange="filterRiwayatTable()">
+                    <option value="">Semua Metode</option>
+                    <option value="tunai">Tunai</option>
+                    <option value="transfer">Transfer</option>
+                    <option value="qris">QRIS</option>
+                    <option value="dp">DP/Pre-Order</option>
+                </select>
+                <select id="riwayat-filter-tipe" class="form-input" style="width:130px;font-size:11px;" onchange="filterRiwayatTable()">
+                    <option value="">Semua Tipe</option>
+                    <option value="kasir">Kasir Manual</option>
+                    <option value="online">Online/Member</option>
+                </select>
+                <button onclick="fetchRiwayatOrder()" class="btn btn-sm" style="background:var(--green-100);color:var(--green-700);"><i class="fa-solid fa-rotate-right"></i> Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;" id="riwayat-summary-cards">
+        <div class="card" style="padding:14px 16px;text-align:center;">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);">Total Order</div>
+            <div id="riwayat-sum-total" style="font-family:var(--font-mono);font-size:22px;font-weight:800;color:var(--gray-800);margin-top:4px;">0</div>
+        </div>
+        <div class="card" style="padding:14px 16px;text-align:center;">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);">Total Pendapatan</div>
+            <div id="riwayat-sum-pendapatan" style="font-family:var(--font-mono);font-size:18px;font-weight:800;color:var(--green-700);margin-top:4px;">Rp 0</div>
+        </div>
+        <div class="card" style="padding:14px 16px;text-align:center;">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);">Rata-rata Order</div>
+            <div id="riwayat-sum-avg" style="font-family:var(--font-mono);font-size:18px;font-weight:800;color:#1d4ed8;margin-top:4px;">Rp 0</div>
+        </div>
+        <div class="card" style="padding:14px 16px;text-align:center;">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);">Order Kasir</div>
+            <div id="riwayat-sum-kasir" style="font-family:var(--font-mono);font-size:22px;font-weight:800;color:var(--amber-600);margin-top:4px;">0</div>
+        </div>
+        <div class="card" style="padding:14px 16px;text-align:center;">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-400);">Order Online</div>
+            <div id="riwayat-sum-online" style="font-family:var(--font-mono);font-size:22px;font-weight:800;color:var(--green-700);margin-top:4px;">0</div>
+        </div>
+        <div class="card" style="padding:14px 16px;text-align:center;">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--red-600);">Dibatalkan</div>
+            <div id="riwayat-sum-batal" style="font-family:var(--font-mono);font-size:22px;font-weight:800;color:var(--red-600);margin-top:4px;">0</div>
+        </div>
+    </div>
+
+    <!-- Tabel Riwayat -->
+    <div class="card" style="overflow:hidden;">
+        <div id="riwayat-loading" style="display:none;text-align:center;padding:32px 0;">
+            <div class="spinner" style="margin:0 auto;"></div>
+            <div style="font-size:12px;color:var(--gray-400);margin-top:8px;">Memuat riwayat order...</div>
+        </div>
+        <div id="riwayat-empty" class="empty-state hidden">
+            <i class="fa-solid fa-folder-open"></i>
+            <p>Tidak ada order dalam rentang waktu ini.</p>
+        </div>
+        <div id="riwayat-table-wrap" style="display:none;overflow-x:auto;">
+            <table class="data-table" style="table-layout:auto;">
+                <thead>
+                    <tr>
+                        <th style="width:110px;">Order ID</th>
+                        <th style="width:80px;">Waktu</th>
+                        <th>Pelanggan</th>
+                        <th style="width:80px;">Tipe</th>
+                        <th>Item Dipesan</th>
+                        <th style="width:80px;">Metode</th>
+                        <th style="width:100px;text-align:right;">Total</th>
+                        <th style="width:80px;text-align:center;">Status</th>
+                        <th style="width:60px;text-align:center;">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="riwayat-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+</div>
+
 <!-- ─── PANEL CHAT ─── -->
 <div id="panel-chat" class="hidden" style="padding:0 0 16px;">
 <div style="max-width:1200px;margin:0 auto;display:grid;grid-template-columns:300px 1fr;gap:16px;height:calc(100vh - 140px);min-height:500px;">
@@ -3749,7 +3853,7 @@
     }
 
     function switchTab(tab) {
-        ['antrean','kasir','laporan','manajemen','konsinyasi','tampilan'].forEach(t => {
+        ['antrean','kasir','laporan','manajemen','konsinyasi','tampilan','riwayat'].forEach(t => {
             const panel = document.getElementById(`panel-${t}`);
             const btn   = document.getElementById(`tab-${t}`);
             if (!panel || !btn) return;
@@ -3775,6 +3879,7 @@
             // Hapus dot notifikasi edit request saat panel konsinyasi dibuka
             document.querySelectorAll('.edit-req-dot').forEach(d => d.remove());
         }
+        if (tab === 'riwayat') fetchRiwayatOrder();
     }
 
     async function loadTokoSettings() {
@@ -9363,6 +9468,268 @@
         </div>
     </div>
 </div>
+
+<!-- ─── RIWAYAT ORDER SCRIPT ─── -->
+<script>
+/* ================================================================
+   RIWAYAT ORDER  —  Halaman riwayat transaksi kasir & online
+================================================================ */
+
+let _riwayatFilter   = 'hari';  // 'hari' | 'minggu' | 'bulan' | 'custom'
+let _riwayatAllData  = [];       // raw data sebelum filter pencarian/metode/tipe
+let _riwayatFiltered = [];       // data setelah semua filter terapkan
+
+/* ── Ambil data dari Supabase ── */
+async function fetchRiwayatOrder() {
+    const loadEl  = document.getElementById('riwayat-loading');
+    const emptyEl = document.getElementById('riwayat-empty');
+    const wrapEl  = document.getElementById('riwayat-table-wrap');
+    if (!loadEl) return;
+
+    loadEl.style.display = 'block';
+    emptyEl.classList.add('hidden');
+    wrapEl.style.display = 'none';
+
+    const { dari, sampai } = _getRiwayatDateRange();
+
+    try {
+        // Query tabel orders (order online & kasir manual)
+        const { data: orders, error } = await _supabase
+            .from('orders')
+            .select('id, order_id, created_at, nama_pelanggan, items, total, metode_bayar, status, catatan, member_id')
+            .gte('created_at', dari + 'T00:00:00+07:00')
+            .lte('created_at', sampai + 'T23:59:59+07:00')
+            .order('created_at', { ascending: false })
+            .limit(500);
+
+        if (error) throw error;
+
+        // Tandai sumber order: kasir vs online
+        const allOrders = (orders || []).map(o => ({
+            ...o,
+            sumber: o.member_id ? 'online' : 'kasir'
+        }));
+
+        _riwayatAllData = allOrders;
+        filterRiwayatTable();
+    } catch (err) {
+        console.error('[riwayat] fetchRiwayatOrder error:', err);
+        loadEl.style.display = 'none';
+        emptyEl.classList.remove('hidden');
+        emptyEl.querySelector('p').textContent = 'Gagal memuat data: ' + (err.message || 'Coba lagi');
+    }
+}
+
+/* ── Hitung rentang tanggal sesuai filter aktif ── */
+function _getRiwayatDateRange() {
+    const today = _todayWIB();
+    if (_riwayatFilter === 'hari') {
+        return { dari: today, sampai: today };
+    } else if (_riwayatFilter === 'minggu') {
+        const d = new Date(Date.now() + 7*3600*1000);
+        d.setDate(d.getDate() - 6);
+        return { dari: d.toISOString().slice(0,10), sampai: today };
+    } else if (_riwayatFilter === 'bulan') {
+        const d = new Date(Date.now() + 7*3600*1000);
+        d.setDate(d.getDate() - 29);
+        return { dari: d.toISOString().slice(0,10), sampai: today };
+    } else {
+        // custom
+        const dari    = document.getElementById('riwayat-tgl-dari')?.value    || today;
+        const sampai  = document.getElementById('riwayat-tgl-sampai')?.value  || today;
+        return { dari, sampai };
+    }
+}
+
+/* ── Set filter rentang waktu ── */
+function setRiwayatFilter(filter) {
+    _riwayatFilter = filter;
+    // Update active button styling
+    ['hari','minggu','bulan'].forEach(f => {
+        const btn = document.getElementById(`riwayat-btn-${f}`);
+        if (btn) btn.className = f === filter ? 'filter-btn active' : 'filter-btn';
+    });
+    fetchRiwayatOrder();
+}
+
+/* ── Filter & render tabel berdasarkan search, metode, tipe ── */
+function filterRiwayatTable() {
+    const q       = (document.getElementById('riwayat-search')?.value || '').toLowerCase();
+    const metode  = document.getElementById('riwayat-filter-metode')?.value || '';
+    const tipe    = document.getElementById('riwayat-filter-tipe')?.value || '';
+
+    _riwayatFiltered = _riwayatAllData.filter(o => {
+        // Filter metode pembayaran
+        if (metode) {
+            const oMetode = (o.metode_bayar || '').toLowerCase();
+            if (metode === 'dp') {
+                if (!oMetode.includes('dp') && !oMetode.includes('pre')) return false;
+            } else {
+                if (!oMetode.includes(metode)) return false;
+            }
+        }
+        // Filter tipe kasir/online
+        if (tipe && o.sumber !== tipe) return false;
+        // Filter pencarian
+        if (q) {
+            const orderId = (o.order_id || String(o.id) || '').toLowerCase();
+            const nama    = (o.nama_pelanggan || '').toLowerCase();
+            const items   = JSON.stringify(o.items || []).toLowerCase();
+            if (!orderId.includes(q) && !nama.includes(q) && !items.includes(q)) return false;
+        }
+        return true;
+    });
+
+    renderRiwayatTable();
+}
+
+/* ── Render tabel ── */
+function renderRiwayatTable() {
+    const loadEl  = document.getElementById('riwayat-loading');
+    const emptyEl = document.getElementById('riwayat-empty');
+    const wrapEl  = document.getElementById('riwayat-table-wrap');
+    const tbody   = document.getElementById('riwayat-tbody');
+    if (!tbody) return;
+
+    loadEl.style.display = 'none';
+
+    if (_riwayatFiltered.length === 0) {
+        emptyEl.classList.remove('hidden');
+        emptyEl.querySelector('p').textContent = 'Tidak ada order dalam rentang waktu ini.';
+        wrapEl.style.display = 'none';
+        _renderRiwayatSummary([]);
+        return;
+    }
+
+    emptyEl.classList.add('hidden');
+    wrapEl.style.display = 'block';
+    _renderRiwayatSummary(_riwayatFiltered);
+
+    tbody.innerHTML = _riwayatFiltered.map(o => {
+        const waktu   = _formatWaktuWIB(o.created_at);
+        const orderId = o.order_id || ('#' + String(o.id).slice(-6));
+        const nama    = o.nama_pelanggan || '—';
+        const items   = _parseItems(o.items);
+        const itemStr = items.slice(0,2).map(i => `${i.nama}×${i.qty}`).join(', ') + (items.length > 2 ? ` +${items.length-2} lagi` : '');
+        const total   = Number(o.total || 0);
+        const metode  = _labelMetode(o.metode_bayar);
+        const status  = _badgeStatus(o.status);
+        const sumber  = o.sumber === 'online'
+            ? `<span class="rekap-sumber-badge badge-online"><i class="fa-solid fa-globe"></i> Online</span>`
+            : `<span class="rekap-sumber-badge badge-kasir"><i class="fa-solid fa-cash-register"></i> Kasir</span>`;
+
+        return `<tr style="border-bottom:1px solid var(--gray-100);">
+            <td style="padding:10px 8px;">
+                <span class="order-id-badge" style="font-size:9px;">${orderId}</span>
+            </td>
+            <td style="padding:10px 8px;font-size:10px;color:var(--gray-500);white-space:nowrap;">${waktu}</td>
+            <td style="padding:10px 8px;font-weight:600;font-size:12px;color:var(--gray-800);">${_esc(nama)}</td>
+            <td style="padding:10px 8px;">${sumber}</td>
+            <td style="padding:10px 8px;font-size:11px;color:var(--gray-600);">${_esc(itemStr)}</td>
+            <td style="padding:10px 8px;">
+                <span style="font-size:10px;font-weight:700;background:var(--gray-100);color:var(--gray-600);padding:2px 7px;border-radius:5px;">${metode}</span>
+            </td>
+            <td style="padding:10px 8px;text-align:right;font-family:var(--font-mono);font-weight:800;font-size:12px;color:var(--green-700);">
+                Rp ${total.toLocaleString('id-ID')}
+            </td>
+            <td style="padding:10px 8px;text-align:center;">${status}</td>
+            <td style="padding:10px 8px;text-align:center;">
+                <button onclick="bukaDetailRiwayat('${o.id}')"
+                    class="btn btn-sm"
+                    style="font-size:10px;padding:4px 8px;background:var(--green-50);color:var(--green-700);border:1px solid var(--green-200);">
+                    <i class="fa-solid fa-eye"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+/* ── Summary cards ── */
+function _renderRiwayatSummary(data) {
+    const nonBatal  = data.filter(o => (o.status||'').toLowerCase() !== 'dibatalkan' && (o.status||'').toLowerCase() !== 'cancelled' && (o.status||'').toLowerCase() !== 'batal');
+    const totalPend = nonBatal.reduce((s,o) => s + Number(o.total||0), 0);
+    const avg       = nonBatal.length ? Math.round(totalPend / nonBatal.length) : 0;
+    const kasir     = nonBatal.filter(o => o.sumber === 'kasir').length;
+    const online    = nonBatal.filter(o => o.sumber === 'online').length;
+    const batal     = data.length - nonBatal.length;
+
+    const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setTxt('riwayat-sum-total',       data.length);
+    setTxt('riwayat-sum-pendapatan',  'Rp ' + totalPend.toLocaleString('id-ID'));
+    setTxt('riwayat-sum-avg',         'Rp ' + avg.toLocaleString('id-ID'));
+    setTxt('riwayat-sum-kasir',       kasir);
+    setTxt('riwayat-sum-online',      online);
+    setTxt('riwayat-sum-batal',       batal);
+}
+
+/* ── Buka modal detail order (reuse modal yang sudah ada di kode asli) ── */
+function bukaDetailRiwayat(orderId) {
+    const order = _riwayatAllData.find(o => String(o.id) === String(orderId));
+    if (!order) return;
+    // Gunakan fungsi openOrderDetail yang sudah ada jika tersedia
+    if (typeof openOrderDetail === 'function') {
+        openOrderDetail(order);
+        return;
+    }
+    // Fallback: tampilkan modal sederhana
+    const items   = _parseItems(order.items);
+    const itemStr = items.map(i => `• ${i.nama} ×${i.qty} = Rp ${(i.harga*i.qty).toLocaleString('id-ID')}`).join('\n');
+    const waktu   = _formatWaktuWIB(order.created_at);
+    alert(
+        `Order: ${order.order_id || '#'+order.id}\n` +
+        `Waktu: ${waktu}\n` +
+        `Pelanggan: ${order.nama_pelanggan || '—'}\n` +
+        `Sumber: ${order.sumber === 'online' ? 'Online/Member' : 'Kasir Manual'}\n` +
+        `Metode: ${_labelMetode(order.metode_bayar)}\n` +
+        `Status: ${order.status || '—'}\n\n` +
+        `Item:\n${itemStr}\n\n` +
+        `Total: Rp ${Number(order.total||0).toLocaleString('id-ID')}\n` +
+        (order.catatan ? `Catatan: ${order.catatan}` : '')
+    );
+}
+
+/* ── Helpers ── */
+function _parseItems(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    try { return JSON.parse(raw); } catch { return []; }
+}
+
+function _formatWaktuWIB(iso) {
+    if (!iso) return '—';
+    try {
+        const d = new Date(iso);
+        // Convert ke WIB (UTC+7)
+        const wib = new Date(d.getTime() + 7*3600*1000);
+        const pad = n => String(n).padStart(2,'0');
+        return `${pad(wib.getUTCDate())}/${pad(wib.getUTCMonth()+1)} ${pad(wib.getUTCHours())}:${pad(wib.getUTCMinutes())}`;
+    } catch { return '—'; }
+}
+
+function _labelMetode(m) {
+    if (!m) return '—';
+    const map = { tunai:'Tunai', cash:'Tunai', transfer:'Transfer', qris:'QRIS', dp:'DP', 'pre-order':'Pre-Order' };
+    const key = m.toLowerCase();
+    for (const [k,v] of Object.entries(map)) { if (key.includes(k)) return v; }
+    return m;
+}
+
+function _badgeStatus(s) {
+    if (!s) return '<span style="font-size:9px;color:var(--gray-400);">—</span>';
+    const lower = s.toLowerCase();
+    if (lower.includes('selesai') || lower.includes('done') || lower.includes('paid') || lower.includes('lunas'))
+        return `<span style="font-size:9px;font-weight:700;background:var(--green-100);color:var(--green-700);padding:2px 7px;border-radius:5px;">${s}</span>`;
+    if (lower.includes('batal') || lower.includes('cancel'))
+        return `<span style="font-size:9px;font-weight:700;background:var(--red-100);color:var(--red-600);padding:2px 7px;border-radius:5px;">${s}</span>`;
+    if (lower.includes('pending') || lower.includes('dp') || lower.includes('terbuka'))
+        return `<span style="font-size:9px;font-weight:700;background:var(--amber-100);color:var(--amber-600);padding:2px 7px;border-radius:5px;">${s}</span>`;
+    return `<span style="font-size:9px;font-weight:700;background:var(--gray-100);color:var(--gray-600);padding:2px 7px;border-radius:5px;">${s}</span>`;
+}
+
+function _esc(str) {
+    return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
 
 </body>
 </html>
