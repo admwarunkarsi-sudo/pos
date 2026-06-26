@@ -5326,7 +5326,7 @@
     window.hapusItemOrder = async function(orderDbId, indexItem) {
         if(!confirm("Yakin hapus item ini dari pesanan? Total harga akan disesuaikan otomatis.")) return;
         
-        const order = currentOrdersCache.find(o => o.id === orderDbId);
+        const order = currentOrdersCache.find(o => o.id == orderDbId);
         if(!order) return;
         
         const itemDihapus = order.detail_items[indexItem];
@@ -5351,11 +5351,20 @@
     };
 
     window.bukaPopupGantiItem = function(orderDbId, indexItem) {
-        const order = currentOrdersCache.find(o => o.id === orderDbId);
+        const order = currentOrdersCache.find(o => o.id == orderDbId);
         if(!order) return;
         
         const itemLama = order.detail_items[indexItem];
-        const menuOptionsHtml = menusDataCache.map(m => `<option value="${m.id}">${m.nama} (Rp ${m.harga.toLocaleString('id-ID')})</option>`).join('');
+        
+        // Filter menu yang hanya ready/stok ada
+        const availableMenus = currentMenusCache.filter(m => {
+            const isProdukSendiri = !m.mitra_wa;
+            const stokNum = (m.stok !== null && m.stok !== undefined) ? parseInt(m.stok) : null;
+            const stokHabis = !isProdukSendiri && stokNum !== null && stokNum === 0;
+            return m.is_tersedia && !stokHabis;
+        });
+
+        const menuOptionsHtml = availableMenus.map(m => `<option value="${m.id}">${m.nama} (Rp ${(m.harga_normal || 0).toLocaleString('id-ID')})</option>`).join('');
         
         const formHtml = `
             <div id="modal-ganti-item" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;">
@@ -5367,7 +5376,7 @@
                         ${menuOptionsHtml}
                     </select>
                     <div style="display:flex;gap:10px;">
-                        <button onclick="prosesGantiItem('${orderDbId}', ${indexItem})" style="flex:1;background:var(--hijau);color:#fff;border:none;padding:10px;border-radius:8px;font-weight:bold;cursor:pointer;">Simpan Perubahan</button>
+                        <button onclick="prosesGantiItem('${orderDbId}', ${indexItem})" style="flex:1;background:var(--green-600);color:#fff;border:none;padding:10px;border-radius:8px;font-weight:bold;cursor:pointer;">Simpan Perubahan</button>
                         <button onclick="document.getElementById('modal-ganti-item').remove()" style="flex:1;background:#f3f4f6;color:#374151;border:none;padding:10px;border-radius:8px;font-weight:bold;cursor:pointer;">Batal</button>
                     </div>
                 </div>
@@ -5377,20 +5386,20 @@
     };
 
     window.prosesGantiItem = async function(orderDbId, indexItem) {
-        const order = currentOrdersCache.find(o => o.id === orderDbId);
+        const order = currentOrdersCache.find(o => o.id == orderDbId);
         if(!order) return;
         
         const itemLama = order.detail_items[indexItem];
         const selectMenu = document.getElementById('select-menu-pengganti');
         const idMenuBaru = selectMenu.value;
-        const dataMenuBaru = menusDataCache.find(m => m.id == idMenuBaru);
+        const dataMenuBaru = currentMenusCache.find(m => m.id == idMenuBaru);
         
         if(!dataMenuBaru) return;
         
         const itemBaru = {
             id: dataMenuBaru.id,
             nama: dataMenuBaru.nama,
-            harga: dataMenuBaru.harga,
+            harga: dataMenuBaru.harga_normal || 0,
             qty: itemLama.qty, // mempertahankan qty item sebelumnya
             kategori: dataMenuBaru.kategori,
             gambar_url: dataMenuBaru.gambar_url
