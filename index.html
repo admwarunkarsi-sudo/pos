@@ -3576,7 +3576,7 @@
 </div>
 
 <div id="modal-detail-pesanan" class="modal-overlay">
-    <div class="modal-box">
+    <div class="modal-box" style="max-width:550px;width:95%;">
         <div id="modal-header-bg" class="modal-header green">
             <div class="modal-header-title">
                 <span id="modal-order-id" class="modal-order-id-badge">ID: —</span>
@@ -5222,13 +5222,21 @@
         document.getElementById('modal-catatan-text').innerText = order.catatan || '—';
 
         const itemsList = document.getElementById('modal-items-list');
-        itemsList.innerHTML = order.detail_items.map(item => `
-            <div class="modal-item-row">
-                <div>
-                    <div class="modal-item-name">${item.nama}</div>
-                    <div class="modal-item-price">Rp ${(item.harga || 0).toLocaleString('id-ID')} / pcs</div>
+        itemsList.innerHTML = order.detail_items.map((item, index) => `
+            <div class="modal-item-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                    <div>
+                        <div class="modal-item-name">${item.nama}</div>
+                        <div class="modal-item-price">Rp ${(item.harga || 0).toLocaleString('id-ID')} / pcs</div>
+                    </div>
+                    <span class="modal-item-qty">×${item.qty}</span>
                 </div>
-                <span class="modal-item-qty">×${item.qty}</span>
+                ${!isReward && (order.status === 'Antrean' || order.status === 'Diproses') ? `
+                <div style="display:flex; gap:6px; justify-content:flex-end;">
+                    <button onclick="bukaPopupGantiItem('${order.id}', ${index})" style="background:#f3f4f6; color:#4b5563; border:none; padding:4px 8px; border-radius:4px; font-size:10px; font-weight:bold; cursor:pointer;"><i class="fa-solid fa-pen"></i> Ganti</button>
+                    <button onclick="hapusItemOrder('${order.id}', ${index})" style="background:#fef2f2; color:#dc2626; border:none; padding:4px 8px; border-radius:4px; font-size:10px; font-weight:bold; cursor:pointer;"><i class="fa-solid fa-trash"></i> Hapus</button>
+                </div>
+                ` : ''}
             </div>
         `).join('');
 
@@ -5313,6 +5321,101 @@
         }
         loadData();
     }
+
+    // --- FUNGSI EDIT / HAPUS ITEM PESANAN OLEH ADMIN ---
+    window.hapusItemOrder = async function(orderDbId, indexItem) {
+        if(!confirm("Yakin hapus item ini dari pesanan? Total harga akan disesuaikan otomatis.")) return;
+        
+        const order = currentOrdersCache.find(o => o.id === orderDbId);
+        if(!order) return;
+        
+        const itemDihapus = order.detail_items[indexItem];
+        order.detail_items.splice(indexItem, 1);
+        
+        const totalBaru = order.detail_items.reduce((acc, curr) => acc + (curr.harga * curr.qty), 0);
+        const notifBaru = `⚠️ Admin MENGHAPUS [${itemDihapus.nama}] dari pesanan Anda karena stok habis.`;
+        
+        try {
+            await _supabase.from('orders').update({
+                detail_items: order.detail_items,
+                total_harga: totalBaru,
+                notif_admin: order.notif_admin ? order.notif_admin + "<br/>" + notifBaru : notifBaru
+            }).eq('id', orderDbId);
+            
+            showToast("Item berhasil dihapus", "green");
+            fetchOrders();
+            setTimeout(() => { openOrderModal(order.order_id); }, 500);
+        } catch(e) {
+            alert("Gagal menghapus item: " + e.message);
+        }
+    };
+
+    window.bukaPopupGantiItem = function(orderDbId, indexItem) {
+        const order = currentOrdersCache.find(o => o.id === orderDbId);
+        if(!order) return;
+        
+        const itemLama = order.detail_items[indexItem];
+        const menuOptionsHtml = menusDataCache.map(m => `<option value="${m.id}">${m.nama} (Rp ${m.harga.toLocaleString('id-ID')})</option>`).join('');
+        
+        const formHtml = `
+            <div id="modal-ganti-item" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;">
+                <div style="background:#fff;padding:20px;border-radius:12px;width:90%;max-width:400px;">
+                    <h3 style="font-weight:900;margin-bottom:10px;">Ganti Menu</h3>
+                    <p style="font-size:12px;color:#6b7280;margin-bottom:15px;">Item lama: <b>${itemLama.nama} (x${itemLama.qty})</b></p>
+                    <label style="font-size:12px;font-weight:bold;margin-bottom:5px;display:block;">Pilih Menu Pengganti:</label>
+                    <select id="select-menu-pengganti" style="width:100%;padding:10px;border-radius:8px;border:1px solid #d1d5db;margin-bottom:20px;">
+                        ${menuOptionsHtml}
+                    </select>
+                    <div style="display:flex;gap:10px;">
+                        <button onclick="prosesGantiItem('${orderDbId}', ${indexItem})" style="flex:1;background:var(--hijau);color:#fff;border:none;padding:10px;border-radius:8px;font-weight:bold;cursor:pointer;">Simpan Perubahan</button>
+                        <button onclick="document.getElementById('modal-ganti-item').remove()" style="flex:1;background:#f3f4f6;color:#374151;border:none;padding:10px;border-radius:8px;font-weight:bold;cursor:pointer;">Batal</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', formHtml);
+    };
+
+    window.prosesGantiItem = async function(orderDbId, indexItem) {
+        const order = currentOrdersCache.find(o => o.id === orderDbId);
+        if(!order) return;
+        
+        const itemLama = order.detail_items[indexItem];
+        const selectMenu = document.getElementById('select-menu-pengganti');
+        const idMenuBaru = selectMenu.value;
+        const dataMenuBaru = menusDataCache.find(m => m.id == idMenuBaru);
+        
+        if(!dataMenuBaru) return;
+        
+        const itemBaru = {
+            id: dataMenuBaru.id,
+            nama: dataMenuBaru.nama,
+            harga: dataMenuBaru.harga,
+            qty: itemLama.qty, // mempertahankan qty item sebelumnya
+            kategori: dataMenuBaru.kategori,
+            gambar_url: dataMenuBaru.gambar_url
+        };
+        
+        order.detail_items[indexItem] = itemBaru;
+        
+        const totalBaru = order.detail_items.reduce((acc, curr) => acc + (curr.harga * curr.qty), 0);
+        const notifBaru = `⚠️ Admin MENGGANTI [${itemLama.nama}] menjadi [${itemBaru.nama}] karena stok habis.`;
+        
+        try {
+            await _supabase.from('orders').update({
+                detail_items: order.detail_items,
+                total_harga: totalBaru,
+                notif_admin: order.notif_admin ? order.notif_admin + "<br/>" + notifBaru : notifBaru
+            }).eq('id', orderDbId);
+            
+            document.getElementById('modal-ganti-item').remove();
+            showToast("Item berhasil diganti", "green");
+            fetchOrders();
+            setTimeout(() => { openOrderModal(order.order_id); }, 500);
+        } catch(e) {
+            alert("Gagal mengganti item: " + e.message);
+        }
+    };
 
     async function fetchMembers() {
         const { data: members } = await _supabase.from('members').select('*').order('poin', { ascending: false });
