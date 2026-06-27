@@ -6494,14 +6494,33 @@
         // Fetch members untuk stat
         const { data: members } = await _supabase.from('members').select('poin');
 
-        // Compute stats
-        const totalOmset = (orders||[]).reduce((s,o) => s + (o.total_harga||0), 0);
+        // Compute stats (Robust calculation from detail_items to ensure Produk Sendiri is always counted)
+        let totalOmset = 0;
+        let omsetMitra = 0;
+        let omsetSendiri = 0;
+        (orders||[]).forEach(o => {
+            if (!o.detail_items || o.detail_items.length === 0) {
+                totalOmset += (o.total_harga || 0); // Fallback
+            } else {
+                o.detail_items.forEach(item => {
+                    const subtotal = (item.harga || 0) * (item.qty || 1);
+                    totalOmset += subtotal;
+                    const menuData = currentMenusCache.find(m => m.nama === item.nama || (item.menu_id && m.id === item.menu_id));
+                    if (menuData && menuData.mitra_wa) {
+                        omsetMitra += subtotal;
+                    } else {
+                        omsetSendiri += subtotal;
+                    }
+                });
+            }
+        });
+
         const totalTrans = (orders||[]).length;
         const totalMember = (members||[]).length;
         const totalPoin = (members||[]).reduce((s,m) => s + (m.poin||0), 0);
 
         document.getElementById('stat-omset').textContent = 'Rp ' + totalOmset.toLocaleString('id-ID');
-        document.getElementById('stat-omset-sub').textContent = currentLaporanFilter === 'hari' ? 'Hari ini' : currentLaporanFilter === 'minggu' ? '7 hari terakhir' : currentLaporanFilter === 'bulan' ? 'Bulan ini' : 'Semua waktu';
+        document.getElementById('stat-omset-sub').innerHTML = `<span style="font-size:10px; color:var(--gray-500)">Sendiri: Rp ${omsetSendiri.toLocaleString('id-ID')} | Mitra: Rp ${omsetMitra.toLocaleString('id-ID')}</span>`;
         document.getElementById('stat-transaksi').textContent = totalTrans;
         document.getElementById('stat-transaksi-sub').textContent = currentLaporanFilter === 'hari' ? 'Hari ini' : '';
         document.getElementById('stat-member').textContent = totalMember;
@@ -6510,11 +6529,15 @@
         // ── Estimasi Keuntungan Bersih ──
         // 1. HPP: hitung dari item yang terjual × harga_beli produk
         let totalHPP = 0;
+        let hppMitra = 0;
+        let hppSendiri = 0;
         (orders||[]).forEach(o => {
             (o.detail_items||[]).forEach(item => {
-                const menuData = currentMenusCache.find(m => m.nama === item.nama);
+                const menuData = currentMenusCache.find(m => m.nama === item.nama || (item.menu_id && m.id === item.menu_id));
                 if (menuData && menuData.harga_beli > 0) {
-                    totalHPP += menuData.harga_beli * item.qty;
+                    const cost = menuData.harga_beli * (item.qty || 1);
+                    totalHPP += cost;
+                    if (menuData.mitra_wa) hppMitra += cost; else hppSendiri += cost;
                 }
             });
         });
