@@ -2071,6 +2071,7 @@
                 dashes(W),
                 line('Tanggal : ' + tgl + ' ' + jam),
                 line('ID Order: ' + orderId),
+                line('Nama    : ' + (nama || 'Walk-In')),
                 line('Kasir   : Walk-In (Langsung)'),
                 line('Bayar   : ' + (isDp ? 'DP (Pre-Order)' : metode.toUpperCase())),
                 dashes(W)
@@ -5558,12 +5559,14 @@
 
         const konten = `
             <div class="center big">WARUNK ARSI</div>
-            <div class="center">www.warunkarsi.com</div>
+            <div class="center small">www.warunkarsi.com</div>
             <div class="dash"></div>
-            <div>Tanggal : ${tgl} ${jam}</div>
-            <div>ID Order: ${order.order_id}</div>
-            <div>Member  : ${order.member_name}</div>
-            <div>Sumber  : Online</div>
+            <div class="small" style="font-weight:normal;">
+                <div>Tanggal : ${tgl} ${jam}</div>
+                <div>ID Order: ${order.order_id}</div>
+                <div>Customer: ${order.member_name || 'Online'}</div>
+                <div>Sumber  : Online</div>
+            </div>
             <div class="dash"></div>
             ${itemLines}
             <div class="dash"></div>
@@ -5572,7 +5575,7 @@
                 <span>TOTAL</span><span>${totalStr}</span>
             </div>
             <div class="dash"></div>
-            <div class="center">Terima kasih sudah memesan!</div>
+            <div class="center small" style="margin-top:4px;">Terima kasih sudah memesan!</div>
             <br>
         `;
 
@@ -6324,28 +6327,29 @@
     function _buatHtmlStruk(konten) {
         return `<!DOCTYPE html><html><head>
         <meta charset="utf-8">
-        <meta name="viewport" content="width=54mm, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
             @page { size: 58mm auto; margin: 0; }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            html, body { width: 58mm; }
+            html, body { width: 100%; max-width: 58mm; }
             body {
                 font-family: 'Courier New', monospace;
-                font-size: 9pt;
+                font-size: 12pt;
+                font-weight: 700;
                 line-height: 1.3;
                 color: #000;
-                padding: 2mm 2mm 0 2mm;
+                padding: 1mm 2mm 0 2mm;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
             .center   { text-align: center; }
             .bold     { font-weight: bold; }
-            .big      { font-size: 11pt; font-weight: bold; }
-            .small    { font-size: 8pt; font-weight: bold; }
+            .big      { font-size: 14pt; font-weight: bold; }
+            .small    { font-size: 9pt; font-weight: bold; }
             .dash     { border-top: 1px dashed #000; margin: 2px 0; }
             .row      { display: flex; justify-content: space-between; white-space: nowrap; }
             .row span:last-child { flex-shrink: 0; margin-left: 4px; }
-            .row-item { margin-bottom: 1px; font-size: 8.5pt; font-weight: bold; }
+            .row-item { margin-bottom: 1px; font-size: 11pt; font-weight: bold; }
             #btn-wrap {
                 display: flex; gap: 6px; margin: 8px 0 4px;
             }
@@ -6379,15 +6383,8 @@
                 <button id="btn-tutup" onclick="window.close()">✕ Tutup</button>
             </div>
             <script>
-                // Auto-print saat popup terbuka
-                window.onload = function() {
-                    // Beri waktu render dulu
-                    setTimeout(function() { window.print(); }, 250);
-                };
-                // Tutup popup otomatis setelah print selesai / dibatalkan
-                window.onafterprint = function() {
-                    setTimeout(function() { window.close(); }, 200);
-                };
+                window.onload = function() { setTimeout(function() { window.print(); }, 250); };
+                window.onafterprint = function() { setTimeout(function() { window.close(); }, 200); };
             <\/script>
         </body></html>`;
     }
@@ -6424,12 +6421,15 @@
 
         const konten = `
             <div class="center big">WARUNK ARSI</div>
-            <div class="center">www.warunkarsi.com</div>
+            <div class="center small">www.warunkarsi.com</div>
             <div class="dash"></div>
-            <div>Tanggal : ${tgl} ${jam}</div>
-            <div>ID Order: ${orderId}</div>
-            <div>Kasir   : Walk-In (Langsung)</div>
-            <div>Bayar   : ${isDp ? 'DP (Pre-Order)' : metode.toUpperCase()}</div>
+            <div class="small" style="font-weight:normal;">
+                <div>Tanggal : ${tgl} ${jam}</div>
+                <div>ID Order: ${orderId}</div>
+                <div>Customer: ${nama || 'Walk-In'}</div>
+                <div>Kasir   : Walk-In</div>
+                <div>Bayar   : ${isDp ? 'DP (Pre-Order)' : metode.toUpperCase()}</div>
+            </div>
             <div class="dash"></div>
             ${itemLines}
             <div class="dash"></div>
@@ -6441,7 +6441,7 @@
             ${dpHtml}
             <div class="dash"></div>
             ${statusBadge}
-            <div class="center">Terima kasih sudah berkunjung!</div>
+            <div class="center small" style="margin-top:4px;">Terima kasih sudah berkunjung!</div>
             <br>
         `;
 
@@ -7663,16 +7663,18 @@
 
         return `
             <div class="rp-center rp-big">WARUNK ARSI</div>
-            <div class="rp-center">Rekap Konsinyasi${isAll ? ' Harian' : ''}</div>
+            <div class="rp-center rp-small">Rekap Konsinyasi${isAll ? ' Harian' : ''}</div>
             <div class="rp-dash"></div>
-            <div>${tglLabel.substring(0,W)}</div>
-            <div>Cetak : ${tgl} ${jam}</div>
-            <div>${isAll ? 'Mitra  : ' + list.length + ' mitra' : 'Mitra  : ' + (list[0]?.mitra_nama||'-')}</div>
+            <div class="rp-small" style="font-weight:normal;">
+                <div>${tglLabel.substring(0,W)}</div>
+                <div>Cetak : ${tgl} ${jam}</div>
+                <div>${isAll ? 'Mitra  : ' + list.length + ' mitra' : 'Mitra  : ' + (list[0]?.mitra_nama||'-')}</div>
+            </div>
             <div class="rp-dash"></div>
             ${mitraBlocks}
             ${totalBlock}
             <div class="rp-dash"></div>
-            <div class="rp-center rp-small">Warunk Arsi -- POS Kasir</div>
+            <div class="rp-center rp-small" style="margin-top:4px;">Warunk Arsi -- POS Kasir</div>
             <br>`;
     }
 
@@ -8213,18 +8215,20 @@
         const jam = now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
         const konten = `
             <div class="center big">WARUNK ARSI</div>
-            <div class="center">www.warunkarsi.com</div>
+            <div class="center small">www.warunkarsi.com</div>
             <div class="dash"></div>
-            <div>Tanggal : ${tgl} ${jam}</div>
-            <div>ID Order: ${orderId}</div>
+            <div class="small" style="font-weight:normal;">
+                <div>Tanggal : ${tgl} ${jam}</div>
+                <div>ID Order: ${orderId}</div>
             <div>Status  : LUNAS ✓</div>
             <div>Bayar   : ${metode.toUpperCase()} (Pelunasan)</div>
+            </div>
             <div class="dash"></div>
             <div class="row bold"><span>TOTAL</span><span>Rp ${total.toLocaleString('id-ID')}</span></div>
             <div class="row"><span>Dilunasi</span><span>Rp ${sisa.toLocaleString('id-ID')}</span></div>
             <div class="dash"></div>
             <div class="center" style="border:2px solid #000;border-radius:4px;padding:3px 0;font-weight:700;">✓ PESANAN LUNAS</div>
-            <div class="center" style="margin-top:4px;">Terima kasih sudah berkunjung!</div><br>`;
+            <div class="center small" style="margin-top:4px;">Terima kasih sudah berkunjung!</div><br>`;
         const popup = window.open('','_blank','width=300,height=400,toolbar=0,menubar=0,scrollbars=0');
         if (!popup) return;
         popup.document.write(_buatHtmlStruk(konten));
