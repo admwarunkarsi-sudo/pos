@@ -74,7 +74,7 @@
 
         /* ─── LAYOUT ─── */
         .app-wrapper {
-            max-width: none;
+            max-width: 1400px;
             margin: 0 auto;
             padding: 16px;
             display: flex;
@@ -97,6 +97,8 @@
             z-index: 500;
             overflow: hidden;
             transition: box-shadow .2s, border-radius .2s, top .2s;
+            width: 100%;
+            box-sizing: border-box;
         }
         .topbar.is-stuck {
             top: 0;
@@ -153,15 +155,15 @@
 
         .topbar-tabs {
             display: flex;
-            gap: 6px;
+            gap: 12px;
             z-index: 1;
             flex-wrap: wrap;
         }
         .tab-btn {
             font-family: var(--font);
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 700;
-            padding: 8px 16px;
+            padding: 10px 18px;
             border-radius: var(--radius);
             border: none;
             cursor: pointer;
@@ -179,16 +181,69 @@
         }
         .tab-btn.inactive:hover { background: rgba(255,255,255,.2); }
 
-        /* Mobile topbar: tabs scroll horizontally */
+        /* Mobile topbar: Bottom Navigation Bar */
         @media (max-width: 768px) {
-            .topbar { flex-wrap: nowrap; padding: 10px 14px; gap: 8px; }
-            .topbar-brand { flex-shrink: 0; }
-            .topbar-tabs { overflow-x: auto; padding-bottom: 2px; flex-wrap: nowrap; }
-            .topbar-tabs::-webkit-scrollbar { display: none; }
-            .tab-btn { font-size: 11px; padding: 7px 10px; white-space: nowrap; flex-shrink: 0; }
-            .brand-title { font-size: 13px; }
+            .topbar {
+                padding: 12px 16px;
+                border-radius: 0 0 16px 16px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            }
             .brand-sub { display: none; }
-            #btn-akun-admin { flex-shrink: 0; }
+            .topbar-tabs {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(10px);
+                display: flex;
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                padding: 10px;
+                gap: 8px;
+                border-top: 1px solid rgba(0,0,0,0.05);
+                box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+                z-index: 1000;
+            }
+            .topbar-tabs::-webkit-scrollbar { display: none; }
+            .tab-btn {
+                flex: 0 0 auto;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 4px;
+                font-size: 10px;
+                padding: 8px 14px;
+                border-radius: 12px;
+                background: transparent;
+                color: var(--gray-500);
+            }
+            .tab-btn i { font-size: 16px; margin-bottom: 2px; }
+            .tab-btn.active {
+                background: var(--green-50);
+                color: var(--green-700);
+                box-shadow: none;
+            }
+            .tab-btn.inactive { background: transparent; color: var(--gray-500); }
+            .tab-btn.inactive:hover { background: var(--gray-100); }
+            #btn-akun-admin {
+                position: fixed !important;
+                top: 12px;
+                right: 16px;
+                width: 36px;
+                height: 36px;
+                padding: 0;
+                border-radius: 50%;
+                background: rgba(255,255,255,0.2);
+                color: #fff;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 501;
+                font-size: 0;
+            }
+            #btn-akun-admin i { font-size: 14px; margin: 0; }
+            .app-wrapper { padding-bottom: 80px; } /* Space for bottom nav */
         }
 
         /* ─── CARDS / PANELS ─── */
@@ -221,9 +276,20 @@
 
         /* ─── GRID PANELS ─── */
         .panel-grid {
-            display: grid;
-            grid-template-columns: 1fr;
+            display: flex;
+            flex-direction: column;
             gap: 16px;
+            width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+        }
+        @media (min-width: 768px) {
+            .panel-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                align-items: start;
+            }
+            .col-span-2 { grid-column: span 2; }
         }
         @media (min-width: 1024px) {
             .panel-grid { grid-template-columns: 1fr 1fr 1fr; }
@@ -233,21 +299,26 @@
         /* ─── ORDER CARDS ─── */
         .order-card {
             background: var(--white);
-            border-radius: var(--radius);
-            border: 1px solid var(--gray-200);
-            border-left: 3px solid var(--green-600);
-            padding: 14px 16px;
+            border-radius: 16px;
+            border: 1px solid var(--gray-100);
+            border-left: 4px solid var(--green-500);
+            padding: 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             cursor: pointer;
-            transition: all .15s;
-            box-shadow: var(--shadow-sm);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            animation: fadeIn 0.4s ease-out;
         }
         .order-card:hover {
-            transform: translateY(-1px);
-            box-shadow: var(--shadow);
-            border-left-color: var(--green-500);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+            border-left-color: var(--green-600);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         .order-card.reward {
             border-left-color: var(--amber-500);
@@ -291,13 +362,14 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px 12px;
-            border-radius: var(--radius-sm);
-            background: var(--gray-50);
-            border: 1px solid var(--gray-100);
-            transition: background .15s;
+            padding: 12px 16px;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid var(--gray-100);
+            transition: background 0.2s;
         }
-        .member-item:hover { background: var(--green-50); }
+        .member-item:last-child { border-bottom: none; }
+        .member-item:hover { background: var(--gray-50); border-radius: 8px; }
         .member-name {
             font-weight: 700;
             font-size: 12px;
@@ -2315,6 +2387,9 @@
             <button onclick="switchTab('riwayat')" id="tab-riwayat" class="tab-btn inactive">
                 <i class="fa-solid fa-wallet"></i> Pengeluaran
             </button>
+            <button onclick="switchTab('bahanbaku')" id="tab-bahanbaku" class="tab-btn inactive">
+                <i class="fa-solid fa-boxes-stacked"></i> Bahan Baku &amp; HPP
+            </button>
         </div>
         <button onclick="bukaMenuAkunAdmin()" id="btn-akun-admin" class="tab-btn inactive" style="position:relative;flex-shrink:0;">
             <i class="fa-solid fa-user-shield"></i> Akun
@@ -2347,6 +2422,16 @@
 
     </div>
 
+    <style>
+        @media (min-width: 901px) {
+            .kasir-sticky-sidebar { position: sticky !important; top: 140px !important; height: calc(100vh - 160px) !important; }
+            .kasir-sticky-search { position: sticky !important; top: 140px !important; background: #eef0f4 !important; z-index: 10 !important; padding-bottom: 12px !important; margin-left: -10px; margin-right: -10px; padding-left: 10px; padding-right: 10px; border-radius: 8px;}
+            .kasir-grid-scroll { overflow-y: auto !important; height: calc(100vh - 320px) !important; padding-right: 10px; padding-bottom: 20px; align-content: flex-start;}
+            /* Custom scrollbar for menu grid */
+            .kasir-grid-scroll::-webkit-scrollbar { width: 6px; }
+            .kasir-grid-scroll::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 4px; }
+        }
+    </style>
     <!-- ─── PANEL KASIR MANUAL ─── -->
 <div id="panel-kasir" class="hidden" style="padding:0 0 16px;">
 <div style="margin:0 auto;">
@@ -2372,22 +2457,26 @@
         <!-- Left: Menu Pilihan -->
         <div>
             <!-- Search + Kategori -->
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
-                <div class="search-wrap" style="flex:1;min-width:180px;">
-                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                    <input type="text" id="kasir-search" oninput="filterKasirMenu()" placeholder="Cari menu..." class="search-input">
+            <div class="kasir-sticky-search">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+                    <div class="search-wrap" style="flex:1;min-width:180px;">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="kasir-search" oninput="filterKasirMenu()" placeholder="Cari menu..." class="search-input">
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:11px;color:var(--gray-400);font-weight:700;">Pelanggan:</span>
+                        <input type="text" id="kasir-nama-pelanggan" placeholder="Nama (opsional)" class="form-input" style="width:160px;font-size:12px;">
+                    </div>
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <span style="font-size:11px;color:var(--gray-400);font-weight:700;">Pelanggan:</span>
-                    <input type="text" id="kasir-nama-pelanggan" placeholder="Nama (opsional)" class="form-input" style="width:160px;font-size:12px;">
-                </div>
+                <div id="kasir-cat-tabs" class="menu-cat-tabs"></div>
             </div>
-            <div id="kasir-cat-tabs" class="menu-cat-tabs"></div>
-            <div id="kasir-menu-grid" class="menu-grid"></div>
+            <div class="kasir-grid-scroll">
+                <div id="kasir-menu-grid" class="menu-grid"></div>
+            </div>
         </div>
 
         <!-- Right: Keranjang -->
-        <div class="cart-panel" id="cart-panel">
+        <div class="cart-panel kasir-sticky-sidebar" id="cart-panel">
             <div class="cart-header" onclick="if(window.innerWidth<=900){toggleCartMobile()}">
                 <span class="cart-title">
                     <i class="fa-solid fa-basket-shopping" style="color:var(--green-600);"></i>
@@ -2416,6 +2505,38 @@
             </div>
 
             <div class="cart-footer">
+                <button onclick="bukaCheckoutModal()" id="btn-proses-checkout" class="btn btn-primary" style="font-size:14px;padding:14px;width:100%;margin-bottom:10px;">
+                    <i class="fa-solid fa-cart-arrow-down"></i> Proses Pembayaran
+                </button>
+                
+                <!-- Keyboard Shortcut Hint -->
+                <div class="kbd-hint">
+                    <span><kbd>â†‘</kbd><kbd>â†“</kbd> pilih item</span>
+                    <span><kbd>â†</kbd><kbd>â†’</kbd> qty -/+</span>
+                    <span><kbd>Del</kbd> hapus item</span>
+                    <span><kbd>Enter</kbd> proses</span>
+                    <span><kbd>F2</kbd> cari menu</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="cart-backdrop" id="cart-backdrop" onclick="closeCartMobile()"></div>
+
+    <!-- CHECKOUT MODAL -->
+    <div id="checkout-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:var(--white);border-radius:20px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.2);display:flex;flex-direction:column;">
+            <div style="padding:20px;border-bottom:1px solid var(--gray-100);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--white);z-index:10;">
+                <div style="font-weight:700;font-size:16px;color:var(--gray-800);"><i class="fa-solid fa-cash-register" style="color:var(--green-600);"></i> Ringkasan Pembayaran</div>
+                <button onclick="tutupCheckoutModal()" style="background:none;border:none;font-size:20px;color:var(--gray-400);cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <div style="padding:20px;display:flex;flex-direction:column;gap:16px;">
+                <!-- Summary -->
+                <div style="background:var(--gray-50);padding:16px;border-radius:12px;border:1px solid var(--gray-100);">
+                    <div class="cart-summary-row" style="margin-bottom:8px;"><span>Subtotal</span><span id="cart-subtotal" style="font-weight:600;">Rp 0</span></div>
+                    <div class="cart-summary-row total" style="font-size:20px;color:var(--green-700);border-top:1px dashed var(--gray-200);padding-top:8px;margin-top:8px;"><span>Total</span><span id="cart-total">Rp 0</span></div>
+                </div>
+
                 <!-- Catatan -->
                 <div>
                     <label class="form-label" style="font-size:10px;">Catatan Pesanan</label>
@@ -2440,12 +2561,6 @@
                         </button>
                     </div>
                 </div>
-
-                <hr style="border:none;border-top:1px solid var(--gray-100);">
-
-                <!-- Summary -->
-                <div class="cart-summary-row"><span>Subtotal</span><span id="cart-subtotal">Rp 0</span></div>
-                <div class="cart-summary-row total"><span>Total</span><span id="cart-total">Rp 0</span></div>
 
                 <!-- Kembalian (hanya tunai) -->
                 <div class="kembalian-box" id="kembalian-box">
@@ -2472,9 +2587,9 @@
                 <div class="dp-box hidden" id="dp-box">
                     <div class="dp-box-label">
                         <i class="fa-solid fa-hand-holding-dollar"></i>
-                        Uang Muka (DP) — Pesanan Pre-Order
+                        Uang Muka (DP) - Pesanan Pre-Order
                     </div>
-                    <div style="font-size:9px;color:#92400e;margin-bottom:6px;">Di luar jam operasional — pesanan akan disiapkan saat buka.</div>
+                    <div style="font-size:9px;color:#92400e;margin-bottom:6px;">Di luar jam operasional - pesanan akan disiapkan saat buka.</div>
                     <div class="dp-row">
                         <input type="number" id="dp-nominal" class="dp-input" placeholder="Nominal DP..." oninput="hitungDP()">
                         <div style="display:flex;flex-direction:column;gap:2px;text-align:right;">
@@ -2491,35 +2606,27 @@
                         <button onclick="setDPFull()">Lunas</button>
                     </div>
                 </div>
-
-                <!-- Tombol Proses -->
-                <button onclick="prosesOrderManual()" id="btn-proses-order" class="btn btn-primary" style="font-size:13px;padding:13px;">
-                    <i class="fa-solid fa-check-circle"></i> Proses &amp; Selesaikan Transaksi
+            </div>
+            
+            <div style="padding:20px;border-top:1px solid var(--gray-100);display:flex;flex-direction:column;gap:10px;position:sticky;bottom:0;background:var(--white);z-index:10;border-radius:0 0 20px 20px;">
+                <button onclick="prosesOrderManual()" id="btn-proses-order" class="btn btn-primary" style="font-size:14px;padding:14px;">
+                    <i class="fa-solid fa-check-circle"></i> Selesaikan Transaksi
                 </button>
-
-                <!-- Tombol Simpan ke Antrian -->
-                <button onclick="simpanKeAntrian()" id="btn-simpan-antrian" class="btn" style="font-size:12px;padding:10px;background:#fffbeb;color:#92400e;border:1.5px solid #fbbf24;border-radius:8px;font-weight:700;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:7px;">
+                <button onclick="simpanKeAntrian()" id="btn-simpan-antrian" class="btn" style="font-size:13px;padding:12px;background:#fffbeb;color:#92400e;border:1.5px solid #fbbf24;border-radius:12px;font-weight:700;cursor:pointer;">
                     <i class="fa-solid fa-clock"></i> Simpan ke Pesanan Terbuka
                 </button>
-
-                <!-- Keyboard Shortcut Hint -->
-                <div class="kbd-hint">
-                    <span><kbd>↑</kbd><kbd>↓</kbd> pilih item</span>
-                    <span><kbd>←</kbd><kbd>→</kbd> qty −/+</span>
-                    <span><kbd>Del</kbd> hapus item</span>
-                    <span><kbd>Enter</kbd> proses</span>
-                    <span><kbd>F2</kbd> cari menu</span>
-                </div>
+                <button onclick="tutupCheckoutModal()" class="btn" style="font-size:13px;padding:12px;background:var(--gray-100);color:var(--gray-600);border:1px solid var(--gray-200);border-radius:12px;font-weight:700;cursor:pointer;">
+                    <i class="fa-solid fa-xmark"></i> Kembali / Batal
+                </button>
             </div>
         </div>
     </div>
-    <div class="cart-backdrop" id="cart-backdrop" onclick="closeCartMobile()"></div>
 </div>
 </div>
 
     <!-- ─── PANEL LAPORAN ─── -->
 <div id="panel-laporan" class="hidden" style="padding:0 0 16px;">
-<div style="max-width:1200px;margin:0 auto;">
+<div style="width:100%;margin:0 auto;min-width:0;box-sizing:border-box;">
 
     <div class="laporan-filter">
         <button class="filter-btn active" id="filter-hari" onclick="setLaporanFilter('hari')">Hari Ini</button>
@@ -2612,7 +2719,7 @@
     <div id="panel-manajemen" class="hidden panel-grid">
 
         <!-- Left: Tambah Menu only (Tampilan dipindah ke tab sendiri) -->
-        <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="display:flex;flex-direction:column;gap:16px;width:100%;min-width:0;box-sizing:border-box;">
 
             <!-- Tambah Menu -->
             <div class="card">
@@ -2782,8 +2889,8 @@
 </div>
 
 <!-- ─── PANEL KONSINYASI ADMIN ─── -->
-<div id="panel-konsinyasi" class="hidden" style="padding:0 16px 24px;">
-<div style="max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:16px;">
+<div id="panel-konsinyasi" class="hidden" style="padding:0 0 16px;">
+<div style="width:100%;margin:0 auto;display:flex;flex-direction:column;gap:16px;min-width:0;box-sizing:border-box;padding:0 20px;">
 
     <div class="info-box" id="kons-info-box">
         <i class="fa-solid fa-circle-info"></i>
@@ -2937,10 +3044,11 @@
 
 </div>
 </div>
+</div>
 
 <!-- ─── PANEL TAMPILAN WEB ─── -->
-<div id="panel-tampilan" class="hidden">
-<div style="max-width:1200px;margin:0 auto;padding:0 16px 16px;display:flex;flex-direction:column;gap:20px;">
+<div id="panel-tampilan" class="hidden" style="padding:0 0 16px;">
+<div style="width:100%;margin:0 auto;display:flex;flex-direction:column;gap:20px;min-width:0;box-sizing:border-box;padding:0 20px;">
 
     <!-- Info Bar -->
     <div class="info-box">
@@ -3213,10 +3321,92 @@
 
 </div>
 </div>
+</div>
 
 <!-- ─── PANEL PENGELUARAN ─── -->
+<div id="panel-bahanbaku" class="hidden" style="padding:0 0 16px;">
+<div style="width:100%;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:16px;min-width:0;box-sizing:border-box;padding:0 20px;">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title"><i class="fa-solid fa-boxes-stacked"></i> Bahan Baku &amp; Belanja</div>
+            <button class="btn btn-green-sm" onclick="promptTambahBahan()"><i class="fa-solid fa-plus"></i> Bahan Baru</button>
+        </div>
+        <div class="card-body">
+            <div class="section-label" style="margin-top:10px;"><i class="fa-solid fa-cart-shopping"></i> Input Belanja Harian</div>
+            <div class="form-grid-2">
+                <div>
+                    <label class="form-label">Pilih Bahan</label>
+                    <select id="bahan-belanja-id" class="form-select"><option value="">-- Pilih --</option></select>
+                </div>
+                <div>
+                    <label class="form-label">Tgl Belanja</label>
+                    <input type="date" id="bahan-belanja-tgl" class="form-input" />
+                </div>
+            </div>
+            <div class="form-grid-2" style="margin-top:10px;">
+                <div>
+                    <label class="form-label">Jml (Sesuai Satuan)</label>
+                    <input type="number" id="bahan-belanja-qty" class="form-input" placeholder="Mis: 1000">
+                </div>
+                <div>
+                    <label class="form-label">Total Harga (Rp)</label>
+                    <input type="number" id="bahan-belanja-harga" class="form-input" placeholder="Mis: 50000">
+                </div>
+            </div>
+            <button class="btn btn-primary" style="margin-top:12px;" onclick="simpanBelanjaHarian()"><i class="fa-solid fa-save"></i> Simpan Belanja</button>
+
+            <div class="section-label" style="margin-top:20px;"><i class="fa-solid fa-box"></i> Stok Tersedia</div>
+            <div style="overflow-x:auto;">
+                <table class="data-table" id="table-bahan-baku">
+                    <thead><tr><th>Nama Bahan</th><th>Stok</th><th>HPP/unit</th><th>Aksi</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title"><i class="fa-solid fa-blender"></i> Manajemen Resep Menu (BOM)</div>
+        </div>
+        <div class="card-body">
+            <div class="form-grid-2">
+                <div>
+                    <label class="form-label">Pilih Produk (Menu)</label>
+                    <select id="resep-produk-id" class="form-select" onchange="loadResepMenuUI()"><option value="">-- Pilih --</option></select>
+                </div>
+                <div style="display:flex; align-items:flex-end;">
+                    <div class="badge badge-mono" style="font-size:12px; padding:8px 12px; width:100%;">
+                        Total HPP: <span id="resep-total-hpp" style="color:var(--green-700);">Rp 0</span>
+                    </div>
+                </div>
+            </div>
+            <div class="section-label" style="margin-top:16px;"><i class="fa-solid fa-list-check"></i> Komponen Resep</div>
+            <div style="overflow-x:auto;">
+                <table class="data-table" id="table-resep-menu">
+                    <thead><tr><th>Nama Bahan</th><th>Kebutuhan (per Porsi)</th><th>Estimasi HPP</th><th>Aksi</th></tr></thead>
+                    <tbody id="tbody-resep-menu"><tr><td colspan="4" class="center">Pilih menu di atas...</td></tr></tbody>
+                </table>
+            </div>
+            <div class="form-grid-2" style="margin-top:16px;">
+                <div>
+                    <label class="form-label">Tambah Bahan ke Resep</label>
+                    <select id="resep-tambah-bahan" class="form-select"><option value="">-- Pilih --</option></select>
+                </div>
+                <div>
+                    <label class="form-label">Jumlah Butuh (Per Porsi)</label>
+                    <input type="number" id="resep-tambah-qty" class="form-input" placeholder="Contoh: 15">
+                </div>
+            </div>
+            <button class="btn btn-primary" style="margin-top:12px;" onclick="tambahBahanKeResep()"><i class="fa-solid fa-plus"></i> Tambahkan ke Resep</button>
+        </div>
+    </div>
+</div>
+</div>
+</div>
+
 <div id="panel-riwayat" class="hidden" style="padding:0 0 16px;">
-<div style="max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:16px;">
+<div style="width:100%;margin:0 auto;display:flex;flex-direction:column;gap:16px;min-width:0;box-sizing:border-box;padding:0 20px;">
 
     <!-- Filter & Aksi Bar -->
     <div class="card">
@@ -3352,10 +3542,11 @@
         </div>
     </div>
 </div>
+</div>
 
 <!-- ─── PANEL CHAT ─── -->
 <div id="panel-chat" class="hidden" style="padding:0 0 16px;">
-<div style="max-width:1200px;margin:0 auto;display:grid;grid-template-columns:300px 1fr;gap:16px;height:calc(100vh - 140px);min-height:500px;">
+<div style="width:100%;margin:0 auto;display:grid;grid-template-columns:300px 1fr;gap:16px;min-width:0;box-sizing:border-box;height:calc(100vh - 140px);min-height:500px;">
 
     <!-- Left: Daftar Percakapan -->
     <div class="card" style="display:flex;flex-direction:column;overflow:hidden;min-height:0;">
@@ -3898,7 +4089,7 @@
     }
 
     function switchTab(tab) {
-        ['antrean','kasir','laporan','manajemen','konsinyasi','tampilan','riwayat'].forEach(t => {
+        ['antrean','kasir','laporan','manajemen','konsinyasi','tampilan','riwayat','bahanbaku'].forEach(t => {
             const panel = document.getElementById(`panel-${t}`);
             const btn   = document.getElementById(`tab-${t}`);
             if (!panel || !btn) return;
@@ -5488,7 +5679,11 @@
     }
 
     async function selesaikanOrder(dbId, memberId, totalHarga, isReward) {
+        const { data: theOrder } = await _supabase.from('orders').select('detail_items').eq('id', dbId).single();
         await _supabase.from('orders').update({ status: 'Selesai' }).eq('id', dbId);
+        if (theOrder && theOrder.detail_items) {
+            await prosesBOMDanHPP(theOrder.detail_items, dbId);
+        }
 
         // --- SISIPAN WA SELESAI & BERI POIN ---
         try {
@@ -5903,6 +6098,19 @@
         document.getElementById('cart-backdrop')?.classList.remove('show');
     }
 
+    // Modal Checkout
+    function bukaCheckoutModal() {
+        if (cartItems.length === 0) {
+            Swal.fire({ icon: 'warning', title: 'Keranjang Kosong', text: 'Pilih minimal satu menu untuk diproses!', timer: 2000, showConfirmButton: false });
+            return;
+        }
+        document.getElementById('checkout-modal').classList.remove('hidden');
+    }
+    
+    function tutupCheckoutModal() {
+        document.getElementById('checkout-modal').classList.add('hidden');
+    }
+
     // ─── EDIT PESANAN TERBUKA ───
     function _setEditButtonLabels(editing) {
         const btnProses = document.getElementById('btn-proses-order');
@@ -6278,7 +6486,11 @@
             sumber: isDp ? 'dp' : 'manual'
         };
 
-        const { error } = await _supabase.from('orders').insert([insertPayload]);
+        const { data: insertedData, error } = await _supabase.from('orders').insert([insertPayload]).select();
+        
+        if (insertedData && insertedData[0] && insertPayload.status === 'Selesai') {
+            await prosesBOMDanHPP(detailItems, insertedData[0].id);
+        }
 
         if (btn) {
             btn.disabled = false;
@@ -6527,20 +6739,20 @@
         document.getElementById('stat-poin').textContent = totalPoin.toLocaleString('id-ID');
 
         // ── Estimasi Keuntungan Bersih ──
-        // 1. HPP: hitung dari item yang terjual × harga_beli produk
-        let totalHPP = 0;
-        let hppMitra = 0;
+        // 1. HPP Sendiri (BOM) & HPP Mitra (Harga Setor)
         let hppSendiri = 0;
+        let hppMitra = 0;
         (orders||[]).forEach(o => {
+            if (o.total_hpp > 0) hppSendiri += Number(o.total_hpp);
+            
             (o.detail_items||[]).forEach(item => {
                 const menuData = currentMenusCache.find(m => m.nama === item.nama || (item.menu_id && m.id === item.menu_id));
-                if (menuData && menuData.harga_beli > 0) {
-                    const cost = menuData.harga_beli * (item.qty || 1);
-                    totalHPP += cost;
-                    if (menuData.mitra_wa) hppMitra += cost; else hppSendiri += cost;
+                if (menuData && menuData.mitra_wa && menuData.harga_beli > 0) {
+                    hppMitra += menuData.harga_beli * (item.qty || 1);
                 }
             });
         });
+
         // 2. Pengeluaran: ambil dari tabel pengeluaran sesuai filter
         let totalPengeluaran = 0;
         try {
@@ -6550,8 +6762,12 @@
             const { data: pengeluaranData } = await pengeluaranQuery;
             totalPengeluaran = (pengeluaranData||[]).reduce((s,r) => s + (parseInt(r.jumlah)||0), 0);
         } catch(e) { /* tabel pengeluaran mungkin belum ada */ }
-        // 3. Hitung laba bersih
-        const labaBersih = totalOmset - totalHPP - totalPengeluaran;
+
+        // 3. Hitung laba bersih dengan memisahkan Komisi Mitra dan Hasil Sendiri
+        const komisiMitra = omsetMitra - hppMitra;
+        const keuntunganSendiri = omsetSendiri - hppSendiri;
+        const labaBersih = keuntunganSendiri + komisiMitra - totalPengeluaran;
+
         const labaEl  = document.getElementById('stat-laba-bersih');
         const labaDetailEl = document.getElementById('stat-laba-detail');
         if (labaEl) {
@@ -6559,7 +6775,11 @@
             labaEl.style.color = labaBersih >= 0 ? 'var(--green-700)' : 'var(--red-600)';
         }
         if (labaDetailEl) {
-            labaDetailEl.innerHTML = `<span style="font-size:9px;">Omset <b>Rp ${totalOmset.toLocaleString('id-ID')}</b> − HPP <b>Rp ${totalHPP.toLocaleString('id-ID')}</b> − Pengeluaran <b>Rp ${totalPengeluaran.toLocaleString('id-ID')}</b></span>`;
+            labaDetailEl.innerHTML = `<div style="font-size:10px; line-height:1.4; text-align:left; margin-top:6px; background:rgba(255,255,255,0.4); padding:6px 10px; border-radius:6px; font-weight:600; color:var(--green-900);">
+                Omset Sendiri: Rp ${omsetSendiri.toLocaleString('id-ID')} (HPP: Rp ${hppSendiri.toLocaleString('id-ID')})<br>
+                Komisi Mitra: Rp ${komisiMitra.toLocaleString('id-ID')}<br>
+                Pengeluaran: Rp ${totalPengeluaran.toLocaleString('id-ID')}
+            </div>`;
         }
 
         // Render table
@@ -10349,6 +10569,215 @@ async function hapusPengeluaran() {
     fetchPengeluaran();
 }
 
+// ==========================================
+// MODULE: MANAJEMEN BAHAN BAKU & HPP (BOM)
+// ==========================================
+
+async function loadBahanBakuUI() {
+    const { data, error } = await _supabase.from('bahan_baku').select('*').order('nama_bahan', { ascending: true });
+    if(error) {
+        console.error('Error loadBahanBakuUI', error);
+        return;
+    }
+    
+    const tbody = document.querySelector('#table-bahan-baku tbody');
+    const selBelanja = document.getElementById('bahan-belanja-id');
+    const selResep = document.getElementById('resep-tambah-bahan');
+    
+    tbody.innerHTML = '';
+    selBelanja.innerHTML = '<option value="">-- Pilih --</option>';
+    selResep.innerHTML = '<option value="">-- Pilih --</option>';
+    
+    if(!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="center">Belum ada bahan baku.</td></tr>';
+        return;
+    }
+
+    data.forEach(b => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${b.nama_bahan}</td>
+                <td>${Number(b.stok_sekarang).toLocaleString('id-ID')} ${b.satuan_terkecil}</td>
+                <td>Rp ${Number(b.harga_beli_terakhir).toLocaleString('id-ID')}</td>
+                <td>
+                    <button class="btn btn-danger-sm" onclick="hapusBahan('${b.id_bahan}')"><i class="fa-solid fa-trash"></i></button>
+                </td>
+            </tr>
+        `;
+        selBelanja.innerHTML += `<option value="${b.id_bahan}">${b.nama_bahan} (${b.satuan_terkecil})</option>`;
+        selResep.innerHTML += `<option value="${b.id_bahan}">${b.nama_bahan} (${b.satuan_terkecil})</option>`;
+    });
+}
+
+async function promptTambahBahan() {
+    const nama = prompt('Masukkan nama bahan baku (contoh: Biji Kopi Full Arabica):');
+    if(!nama) return;
+    const satuan = prompt('Masukkan satuan terkecil (contoh: gram, ml, pcs):');
+    if(!satuan) return;
+
+    const { error } = await _supabase.from('bahan_baku').insert([{
+        nama_bahan: nama,
+        satuan_terkecil: satuan,
+        stok_sekarang: 0,
+        harga_beli_terakhir: 0
+    }]);
+    
+    if(error) alert('Gagal menambah bahan: ' + error.message);
+    else loadBahanBakuUI();
+}
+
+async function hapusBahan(id) {
+    if(!confirm('Yakin ingin menghapus bahan baku ini? Resep yang menggunakan bahan ini juga akan terhapus.')) return;
+    await _supabase.from('bahan_baku').delete().eq('id_bahan', id);
+    loadBahanBakuUI();
+}
+
+async function simpanBelanjaHarian() {
+    const idBahan = document.getElementById('bahan-belanja-id').value;
+    const tgl = document.getElementById('bahan-belanja-tgl').value;
+    const qty = parseFloat(document.getElementById('bahan-belanja-qty').value);
+    const harga = parseFloat(document.getElementById('bahan-belanja-harga').value);
+
+    if(!idBahan || !tgl || !qty || !harga) {
+        alert('Lengkapi semua field belanja harian!'); return;
+    }
+
+    const hargaPerUnit = harga / qty;
+
+    const { data: b } = await _supabase.from('bahan_baku').select('stok_sekarang').eq('id_bahan', idBahan).single();
+    const stokBaru = (b?.stok_sekarang || 0) + qty;
+
+    await _supabase.from('bahan_baku').update({
+        stok_sekarang: stokBaru,
+        harga_beli_terakhir: hargaPerUnit
+    }).eq('id_bahan', idBahan);
+
+    await _supabase.from('riwayat_belanja').insert([{
+        id_bahan: idBahan,
+        tanggal_belanja: new Date(tgl).toISOString(),
+        jumlah_belanja: qty,
+        total_harga: harga
+    }]);
+
+    alert('Belanja berhasil disimpan dan stok bertambah!');
+    
+    document.getElementById('bahan-belanja-qty').value = '';
+    document.getElementById('bahan-belanja-harga').value = '';
+    loadBahanBakuUI();
+    if(document.getElementById('resep-produk-id').value) loadResepMenuUI();
+}
+
+async function loadMenuToResepDropdown() {
+    const { data } = await _supabase.from('menu').select('id, nama').order('nama', { ascending: true });
+    const sel = document.getElementById('resep-produk-id');
+    sel.innerHTML = '<option value="">-- Pilih --</option>';
+    if(data) data.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.nama}</option>`);
+}
+
+async function loadResepMenuUI() {
+    const idMenu = document.getElementById('resep-produk-id').value;
+    const tbody = document.getElementById('tbody-resep-menu');
+    const spanHPP = document.getElementById('resep-total-hpp');
+    
+    if(!idMenu) {
+        tbody.innerHTML = '<tr><td colspan="4" class="center">Pilih menu di atas...</td></tr>';
+        spanHPP.innerText = 'Rp 0';
+        return;
+    }
+
+    const { data, error } = await _supabase.from('resep_menu').select('id_resep, id_bahan, jumlah_butuh, bahan_baku(nama_bahan, satuan_terkecil, harga_beli_terakhir)').eq('id_produk', idMenu);
+    
+    if(error || !data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="center">Belum ada resep bahan baku untuk produk ini.</td></tr>';
+        spanHPP.innerText = 'Rp 0';
+        return;
+    }
+
+    let totalHPP = 0;
+    tbody.innerHTML = '';
+    data.forEach(r => {
+        let hpp = r.jumlah_butuh * (r.bahan_baku.harga_beli_terakhir || 0);
+        totalHPP += hpp;
+        tbody.innerHTML += `
+            <tr>
+                <td>${r.bahan_baku.nama_bahan}</td>
+                <td>${r.jumlah_butuh} ${r.bahan_baku.satuan_terkecil}</td>
+                <td>Rp ${Number(hpp).toLocaleString('id-ID')}</td>
+                <td>
+                    <button class="btn btn-danger-sm" onclick="hapusItemResep('${r.id_resep}')"><i class="fa-solid fa-trash"></i></button>
+                </td>
+            </tr>
+        `;
+    });
+    spanHPP.innerText = `Rp ${Number(totalHPP).toLocaleString('id-ID')}`;
+}
+
+async function tambahBahanKeResep() {
+    const idMenu = document.getElementById('resep-produk-id').value;
+    const idBahan = document.getElementById('resep-tambah-bahan').value;
+    const qty = parseFloat(document.getElementById('resep-tambah-qty').value);
+
+    if(!idMenu || !idBahan || !qty) {
+        alert('Pilih Menu, Bahan Baku, dan masukkan Jumlah!'); return;
+    }
+
+    const { error } = await _supabase.from('resep_menu').insert([{
+        id_produk: idMenu,
+        id_bahan: idBahan,
+        jumlah_butuh: qty
+    }]);
+
+    if(error) {
+        if(error.code === '23505') alert('Bahan ini sudah ada di resep menu tersebut!');
+        else alert('Gagal menambah resep: ' + error.message);
+    } else {
+        document.getElementById('resep-tambah-bahan').value = '';
+        document.getElementById('resep-tambah-qty').value = '';
+        loadResepMenuUI();
+    }
+}
+
+async function hapusItemResep(idResep) {
+    if(!confirm('Yakin ingin menghapus komponen bahan ini dari resep?')) return;
+    await _supabase.from('resep_menu').delete().eq('id_resep', idResep);
+    loadResepMenuUI();
+}
+
+async function prosesBOMDanHPP(detailItems, idOrderDB) {
+    try {
+        if(!detailItems || detailItems.length === 0) return;
+        
+        let totalHPPOrder = 0;
+
+        for (let item of detailItems) {
+            if(!item.menu_id) continue;
+            const { data: bom } = await _supabase.from('resep_menu').select('id_bahan, jumlah_butuh, bahan_baku(harga_beli_terakhir, stok_sekarang)').eq('id_produk', String(item.menu_id));
+            
+            if(bom && bom.length > 0) {
+                for (let res of bom) {
+                    let qtyButuh = parseFloat(res.jumlah_butuh) * parseFloat(item.qty);
+                    let hppItem = qtyButuh * parseFloat(res.bahan_baku.harga_beli_terakhir || 0);
+                    totalHPPOrder += hppItem;
+                    
+                    let stokBaru = parseFloat(res.bahan_baku.stok_sekarang || 0) - qtyButuh;
+                    await _supabase.from('bahan_baku').update({ stok_sekarang: stokBaru }).eq('id_bahan', res.id_bahan);
+                }
+            }
+        }
+
+        if(idOrderDB && totalHPPOrder > 0) {
+            await _supabase.from('orders').update({ total_hpp: totalHPPOrder }).eq('id', idOrderDB);
+        }
+    } catch(e) {
+        console.error('Error prosesBOMDanHPP:', e);
+    }
+}
+
+document.getElementById('tab-bahanbaku').addEventListener('click', () => {
+    loadBahanBakuUI();
+    loadMenuToResepDropdown();
+    document.getElementById('bahan-belanja-tgl').value = new Date().toISOString().slice(0,10);
+});
 </script>
 <!-- ─── MODAL DETAIL TRANSAKSI LAPORAN ─── -->
 <div id="modal-laporan-detail" class="modal-overlay" style="z-index:9100;">
