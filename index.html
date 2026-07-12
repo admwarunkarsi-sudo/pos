@@ -4521,8 +4521,8 @@
        Kolom Stok di tabel Kelola Menu otomatis TERKUNCI (tidak bisa
        diedit manual) untuk produk konsinyasi jika hari ini sudah ada
        data stok yang disubmit, baik oleh:
-         • Mitra sendiri lewat Halaman Member (Portal Mitra), atau
-         • Admin lewat Halaman Konsinyasi (modal "Input Stok Mitra"
+         - Mitra sendiri lewat Halaman Member (Portal Mitra), atau
+         - Admin lewat Halaman Konsinyasi (modal "Input Stok Mitra"
            atau dengan mencabut/memberi izin edit ke mitra).
        Stok produk konsinyasi otomatis BERKURANG dari transaksi yang
        terjadi di Kasir Manual, Order Online (Antrean & Pesanan Member),
@@ -8201,6 +8201,64 @@
             } catch (e) {
                 console.warn('[pos] Gagal update stok menu setelah retur:', e);
             }
+
+            // --- NOTIFIKASI WA FONNTE: Selesai & Kunci ---
+            try {
+                const mitraNama = kData.mitra_nama || 'Mitra';
+                const mitraWa   = kData.mitra_wa   || '';
+                const totalMasuk = (kData.detail || []).reduce((s, d) => s + (d.stok_masuk || 0), 0);
+
+                if (mitraWa && mitraWa.trim() !== '-' && mitraWa.trim() !== '') {
+                    // Format nomor WA
+                    let targetWa = mitraWa.trim();
+                    if (targetWa.startsWith('0')) targetWa = '62' + targetWa.substring(1);
+                    else if (targetWa.startsWith('+62')) targetWa = targetWa.substring(1);
+
+                    // Rincian per produk
+                    const rincianProduk = newDetail.map(d => {
+                        const harga = (d.harga_beli || 0).toLocaleString('id-ID');
+                        const sub   = (d.subtotal  || 0).toLocaleString('id-ID');
+                        return `- ${d.nama || 'Produk'}: Terjual ${d.terjual} (@Rp ${harga}) -> Rp ${sub}`;
+                    }).join('\n');
+
+                    const totalTagihan = totalBayar.toLocaleString('id-ID');
+                    const statusLunas = kData.is_paid ? 'Lunas' : 'Belum Lunas';
+
+                    const pesanWA =
+`*REKAP PENJUALAN KONSINYASI - WARUNK ARSI*
+
+Halo ${mitraNama}, berikut adalah rincian laporan penjualan produk titipan Anda untuk periode ini:
+
+*Ringkasan Produk:*
+- Total Masuk: ${totalMasuk} pcs
+- Total Retur: ${totalRetur} pcs
+- Total Terjual: *${totalTerjual} pcs*
+
+*Rincian Penjualan:*
+${rincianProduk}
+
+*Total Tagihan Anda:*
+*Rp ${totalTagihan}*
+Status: ${statusLunas}
+
+---
+Terima kasih banyak atas kerja samanya, semoga titipan produknya makin laris manis dan berkah selalu bagi kita bersama.
+
+Silakan cek detail laporan harian dan riwayat pembayaran Anda secara lengkap melalui Portal Mitra Warunk Arsi di sini:
+>> https://member.warunkarsi.com`;
+
+                    fetch('https://jembatan-fonnte.vercel.app/api/kirim-wa', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ target: targetWa, message: pesanWA })
+                    }).then(r => r.json())
+                      .then(res => console.log('[WA Fonnte Konsinyasi]', res))
+                      .catch(err => console.warn('[WA Fonnte Konsinyasi] Gagal kirim:', err));
+                }
+            } catch (eWa) {
+                console.warn('[pos] Gagal kirim notifikasi WA konsinyasi:', eWa);
+            }
+            // --- AKHIR NOTIFIKASI WA ---
         }
 
         // Update local cache
@@ -10476,7 +10534,7 @@ function bukaDetailRiwayat(orderId) {
     }
     // Fallback: tampilkan modal sederhana
     const items   = _parseItems(order.items);
-    const itemStr = items.map(i => `• ${i.nama} ×${i.qty} = Rp ${(i.harga*i.qty).toLocaleString('id-ID')}`).join('\n');
+    const itemStr = items.map(i => `- ${i.nama} ×${i.qty} = Rp ${(i.harga*i.qty).toLocaleString('id-ID')}`).join('\n');
     const waktu   = _formatWaktuWIB(order.created_at);
     alert(
         `Order: ${order.order_id || '#'+order.id}\n` +
@@ -11250,9 +11308,57 @@ document.getElementById('tab-bahanbaku').addEventListener('click', () => {
         } else {
             showToast('✅ Pesanan Khusus berhasil dibuat dan diteruskan ke Mitra!', 'green');
             document.getElementById('modal-bulk-order').classList.remove('open');
+
+            // --- NOTIFIKASI WA FONNTE: Kirim ke masing-masing mitra ---
+            try {
+                const tglDisplay = tgl.replace('T', ' ');
+                const waDisplay  = wa || '-';
+                const groupKeys  = Object.keys(groupedItems);
+
+                payloads.forEach((p, idx) => {
+                    const mitraWaKey = groupKeys[idx]; // key = mitra_wa atau 'TOKO'
+                    if (!mitraWaKey || mitraWaKey === 'TOKO') return; // skip produk toko sendiri
+
+                    let targetWa = mitraWaKey.trim();
+                    if (targetWa.startsWith('0')) targetWa = '62' + targetWa.substring(1);
+                    else if (targetWa.startsWith('+62')) targetWa = targetWa.substring(1);
+
+                    const daftarProduk = p.detail_items.map(d => `- ${d.nama} x${d.qty} pcs`).join('\n');
+
+                    const pesanWA =
+`*NOTIFIKASI PESANAN KHUSUS BARU - WARUNK ARSI*
+
+Halo Mitra Warunk Arsi, Anda menerima pesanan khusus (Bulk Order) baru dengan detail sebagai berikut:
+
+*Order ID:* ${p.order_id}
+*Pelanggan:* ${nama} (${waDisplay})
+*Waktu Pengambilan:* ${tglDisplay}
+
+*Daftar Produk Anda:*
+${daftarProduk}
+
+---
+Mohon segera login ke Portal Mitra untuk mengecek detail lengkap dan menekan tombol *Terima Pesanan* agar pesanan dapat langsung masuk ke antrean dapur kasir utama:
+>> https://member.warunkarsi.com
+
+Terima kasih atas kerja samanya!`;
+
+                    fetch('https://jembatan-fonnte.vercel.app/api/kirim-wa', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ target: targetWa, message: pesanWA })
+                    }).then(r => r.json())
+                      .then(res => console.log(`[WA BulkOrder -> ${targetWa}]`, res))
+                      .catch(err => console.warn(`[WA BulkOrder -> ${targetWa}] Gagal:`, err));
+                });
+            } catch (eWa) {
+                console.warn('[pos] Gagal kirim notifikasi WA bulk order:', eWa);
+            }
+            // --- AKHIR NOTIFIKASI WA ---
         }
     }
 </script>
 
 </body>
 </html>
+
