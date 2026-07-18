@@ -3083,7 +3083,7 @@
                 <div>
                     <label class="form-label">URL Logo Toko</label>
                     <div style="display:flex;gap:8px;align-items:center;">
-                        <img id="preview-logo" src="" onerror="this.style.display='none'" style="width:40px;height:40px;object-fit:contain;border-radius:8px;border:1px solid var(--gray-200);background:var(--gray-50);display:none;flex-shrink:0;">
+                        <img loading="lazy" id="preview-logo" src="" onerror="this.style.display='none'" style="width:40px;height:40px;object-fit:contain;border-radius:8px;border:1px solid var(--gray-200);background:var(--gray-50);display:none;flex-shrink:0;">
                         <input type="text" id="cfg-logo" class="form-input" placeholder="https://..." oninput="previewLogo(this.value)">
                     </div>
                 </div>
@@ -3185,7 +3185,7 @@
                 <div>
                     <label class="form-label" style="margin-bottom:8px;">Preview Gambar Popup</label>
                     <div class="popup-preview" id="popup-preview-box">
-                        <img id="popup-preview-img" class="popup-preview-img" src="" onerror="this.style.display='none'" alt="">
+                        <img loading="lazy" id="popup-preview-img" class="popup-preview-img" src="" onerror="this.style.display='none'" alt="">
                         <div class="popup-preview-empty" id="popup-preview-empty">
                             <i class="fa-regular fa-image"></i>
                             <span>Belum ada gambar</span>
@@ -3838,7 +3838,7 @@
 
             <!-- Preview foto -->
             <div style="display:flex;align-items:center;gap:14px;">
-                <img id="edit-preview-img" src="" onerror="this.style.opacity='.3'" style="width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid var(--gray-200);background:var(--gray-100);flex-shrink:0;">
+                <img loading="lazy" id="edit-preview-img" src="" onerror="this.style.opacity='.3'" style="width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid var(--gray-200);background:var(--gray-100);flex-shrink:0;">
                 <div style="flex:1;">
                     <label class="form-label">Foto Produk (URL)</label>
                     <input type="text" id="edit-gambar" class="form-input" placeholder="https://..." oninput="document.getElementById('edit-preview-img').src=this.value" style="font-size:11px;">
@@ -3961,9 +3961,25 @@
 </div>
 
 <script>
-    const SUPABASE_URL = "https://tcaizfemtfmfeuutgbct.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_3SBNDNn6tk9Ssl6dZOxi6Q_e2ZFFH14";
+    const SUPABASE_URL = "https://ghfnukejqcioulphszil.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_o9CmewmvcOhV-x5yin7qAQ_W4EKfGtw";
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    /* ── Helper: Cloudinary Upload ── */
+    async function uploadToCloudinary(file) {
+        const url = 'https://api.cloudinary.com/v1_1/heswgpdc/image/upload';
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('upload_preset', 'warsi pos');
+        try {
+            const response = await fetch(url, { method: 'POST', body: fd });
+            if (!response.ok) throw new Error('Gagal upload ke Cloudinary');
+            const data = await response.json();
+            return { publicUrl: data.secure_url, error: null };
+        } catch (err) {
+            return { publicUrl: null, error: err };
+        }
+    }
 
     /* ── Helper: kembalikan tanggal hari ini dalam timezone WIB (UTC+7) ──
        Gunakan ini sebagai pengganti new Date().toISOString().slice(0,10)
@@ -4219,7 +4235,7 @@
         row.className = 'slide-item';
         row.dataset.idx = idx;
         const thumbContent = data.url
-            ? `<img src="${data.url}" style="width:100%;height:100%;object-fit:cover;border-radius:5px;" onerror="this.style.display='none'">`
+            ? `<img loading="lazy" src="${data.url}" style="width:100%;height:100%;object-fit:cover;border-radius:5px;" onerror="this.style.display='none'">`
             : '<i class="fa-regular fa-image" style="font-size:14px;color:var(--gray-400);"></i>';
 
         row.innerHTML = `
@@ -4255,7 +4271,7 @@
             if (field === 'url') {
                 const wrap = document.getElementById(`slide-thumb-wrap-${idx}`);
                 if (wrap) wrap.innerHTML = val
-                    ? `<img src="${val}" style="width:100%;height:100%;object-fit:cover;border-radius:5px;" onerror="this.style.display='none'">`
+                    ? `<img loading="lazy" src="${val}" style="width:100%;height:100%;object-fit:cover;border-radius:5px;" onerror="this.style.display='none'">`
                     : '<i class="fa-regular fa-image" style="font-size:14px;color:var(--gray-400);"></i>';
             }
         }
@@ -4294,20 +4310,15 @@
 
         if (progressBar) progressBar.style.width = '60%';
 
-        const { data, error } = await _supabase.storage
-            .from('menu-images')
-            .upload(fileName, file, { cacheControl: '3600', upsert: false });
+        const { publicUrl, error } = await uploadToCloudinary(file);
 
-        if (error) {
-            alert('Gagal mengunggah gambar slide! ' + (error.message || ''));
+        if (error || !publicUrl) {
+            alert('Gagal mengunggah gambar slide! ' + (error?.message || ''));
             if (btn) { btn.classList.remove('uploading'); btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Upload'; }
             if (progressWrap) progressWrap.style.display = 'none';
             input.value = '';
             return;
         }
-
-        const { data: urlData } = _supabase.storage.from('menu-images').getPublicUrl(fileName);
-        const publicUrl = urlData?.publicUrl || '';
 
         if (progressBar) progressBar.style.width = '100%';
 
@@ -4323,7 +4334,7 @@
 
         // Update thumb
         const wrap = document.getElementById(`slide-thumb-wrap-${idx}`);
-        if (wrap) wrap.innerHTML = `<img src="${publicUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:5px;">`;
+        if (wrap) wrap.innerHTML = `<img loading="lazy" src="${publicUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:5px;">`;
 
         setTimeout(() => {
             if (btn) { btn.classList.remove('uploading'); btn.innerHTML = '<i class="fa-solid fa-check"></i> Terupload'; }
@@ -4354,19 +4365,14 @@
         const fileExt  = file.name.split('.').pop();
         const fileName = `popup_${Date.now()}_${Math.random().toString(36).substring(2,8)}.${fileExt}`;
 
-        const { data, error } = await _supabase.storage
-            .from('menu-images')
-            .upload(fileName, file, { cacheControl: '3600', upsert: false });
+        const { publicUrl, error } = await uploadToCloudinary(file);
 
-        if (error) {
-            alert('Gagal mengunggah gambar popup! ' + (error.message || ''));
+        if (error || !publicUrl) {
+            alert('Gagal mengunggah gambar popup! ' + (error?.message || ''));
             if (label) label.textContent = 'Upload Gambar Langsung';
             input.value = '';
             return;
         }
-
-        const { data: urlData } = _supabase.storage.from('menu-images').getPublicUrl(fileName);
-        const publicUrl = urlData?.publicUrl || '';
 
         const urlInput = document.getElementById('cfg-popup-gambar');
         if (urlInput) urlInput.value = publicUrl;
@@ -4432,21 +4438,18 @@
 
         statusLabel.innerText = "Mengunggah...";
 
-        const { data, error } = await _supabase.storage
-            .from('menu-images')
-            .upload(filePath, file, { cacheControl: '3600', upsert: false });
+        const { publicUrl, error } = await uploadToCloudinary(file);
 
-        if (error) {
+        if (error || !publicUrl) {
             console.error("Upload error:", error);
-            alert("Gagal mengunggah foto! Pastikan kebijakan RLS Storage sudah benar.");
+            alert("Gagal mengunggah foto ke Cloudinary!");
             statusLabel.innerText = "Gagal, Coba Lagi";
             fileInput.value = "";
             return;
         }
 
-        const { data: publicUrlData } = _supabase.storage.from('menu-images').getPublicUrl(filePath);
-        if (publicUrlData && publicUrlData.publicUrl) {
-            hiddenUrlInput.value = publicUrlData.publicUrl;
+        if (publicUrl) {
+            hiddenUrlInput.value = publicUrl;
             statusLabel.innerText = "✓ Foto Berhasil Terunggah";
         }
     }
@@ -4702,7 +4705,7 @@
             <tr style="${m.mitra_wa ? 'background:linear-gradient(90deg,#fffbeb 0,#fff 80px);border-left:3px solid var(--amber-400);' : ''}">
                 <td>
                     <div style="display:flex;align-items:center;gap:10px;">
-                        <img src="${m.gambar_url || ''}" onerror="this.style.display='none'" style="width:30px;height:30px;object-fit:cover;border-radius:6px;border:1px solid var(--gray-200);flex-shrink:0;">
+                        <img loading="lazy" src="${m.gambar_url || ''}" onerror="this.style.display='none'" style="width:30px;height:30px;object-fit:cover;border-radius:6px;border:1px solid var(--gray-200);flex-shrink:0;">
                         <div style="min-width:0;flex:1;overflow:hidden;">
                             <span class="badge badge-mono" style="display:inline-block;margin-bottom:2px;font-size:9px;">${m.id}</span>
                             <input type="text" id="name-${m.id}" value="${m.nama}" class="tbl-input" style="font-weight:700;font-size:11px;">
@@ -5229,10 +5232,8 @@
         label.textContent = 'Mengunggah...';
         const ext  = file.name.split('.').pop();
         const name = `edit_${Date.now()}_${Math.random().toString(36).substring(2,8)}.${ext}`;
-        const { error } = await _supabase.storage.from('menu-images').upload(name, file, { cacheControl: '3600', upsert: false });
-        if (error) { label.textContent = 'Gagal, coba lagi'; input.value = ''; return; }
-        const { data: urlData } = _supabase.storage.from('menu-images').getPublicUrl(name);
-        const url = urlData?.publicUrl || '';
+        const { publicUrl: url, error } = await uploadToCloudinary(file);
+        if (error || !url) { label.textContent = 'Gagal, coba lagi'; input.value = ''; return; }
         document.getElementById('edit-gambar').value = url;
         document.getElementById('edit-preview-img').src = url;
         label.textContent = '✓ Foto Berhasil Diupload';
@@ -5936,7 +5937,7 @@
                 (isFlash && !efektifHabis ? '<span class="flash-badge">FLASH \uD83D\uDD25</span>' : '') +
                 (efektifHabis ? '<div class="habis-badge">' + (dilluarWaktuFs ? 'Waktu Habis' : 'HABIS') + '</div>' : '') +
                 stokBadge +
-                '<img class="menu-card-img" src="' + imgSrc + '" onerror="this.src=\'https://img.icons8.com/illustrations/kolor/96/fast-food.png\'" alt="' + m.nama + '">' +
+                '<img loading="lazy" class="menu-card-img" src="' + imgSrc + '" onerror="this.src=\'https://img.icons8.com/illustrations/kolor/96/fast-food.png\'" alt="' + m.nama + '">' +
                 '<div class="menu-card-body">' +
                     '<div class="menu-card-name">' + m.nama + '</div>' +
                     '<div class="menu-card-price' + (isFlash ? ' flash' : '') + '">Rp ' + harga.toLocaleString('id-ID') + '</div>' +
@@ -9643,7 +9644,7 @@ Silakan cek detail laporan harian dan riwayat pembayaran Anda secara lengkap mel
             const stokKasirNow = (p.stok !== null && p.stok !== undefined) ? p.stok : 0;
             return `
             <div style="display:flex;align-items:center;gap:10px;background:var(--white);border:1.5px solid var(--gray-200);border-radius:var(--radius);padding:10px 12px;">
-                <img src="${p.gambar_url || ''}" onerror="this.src='https://img.icons8.com/illustrations/kolor/64/fast-food.png'"
+                <img loading="lazy" src="${p.gambar_url || ''}" onerror="this.src='https://img.icons8.com/illustrations/kolor/64/fast-food.png'"
                      style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;border:1px solid var(--gray-100);">
                 <div style="flex:1;min-width:0;">
                     <div style="font-size:12px;font-weight:700;color:var(--gray-800);">${p.nama}</div>
