@@ -3399,14 +3399,18 @@
                     <tbody id="tbody-resep-menu"><tr><td colspan="4" class="center">Pilih menu di atas...</td></tr></tbody>
                 </table>
             </div>
-            <div class="form-grid-2" style="margin-top:16px;">
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top:16px;">
                 <div>
-                    <label class="form-label">Tambah Bahan ke Resep</label>
+                    <label class="form-label">Hasil Jadi (Porsi)</label>
+                    <input type="number" id="resep-tambah-hasil" class="form-input" placeholder="Misal: 30" value="1" min="1">
+                </div>
+                <div>
+                    <label class="form-label">Pilih Bahan Baku</label>
                     <select id="resep-tambah-bahan" class="form-select"><option value="">-- Pilih --</option></select>
                 </div>
                 <div>
-                    <label class="form-label">Jumlah Butuh (Per Porsi)</label>
-                    <input type="number" id="resep-tambah-qty" class="form-input" placeholder="Contoh: 15">
+                    <label class="form-label">Takaran Pakai (Bahan)</label>
+                    <input type="number" id="resep-tambah-qty" class="form-input" placeholder="Misal: 1500">
                 </div>
             </div>
             <button class="btn btn-primary" style="margin-top:12px;" onclick="tambahBahanKeResep()"><i class="fa-solid fa-plus"></i> Tambahkan ke Resep</button>
@@ -10915,12 +10919,15 @@ async function simpanBelanjaHarian() {
         total_harga: harga
     }]);
 
-    alert('Belanja berhasil disimpan dan stok bertambah!');
-    
     document.getElementById('bahan-belanja-qty').value = '';
     document.getElementById('bahan-belanja-harga').value = '';
     loadBahanBakuUI();
     if(document.getElementById('resep-produk-id').value) loadResepMenuUI();
+    
+    // Auto-update stok & HPP menu
+    await hitungUlangStokMenuSendiri();
+    
+    alert('Belanja berhasil disimpan dan stok otomatis dihitung ulang!');
 }
 
 async function loadMenuToResepDropdown() {
@@ -10971,11 +10978,14 @@ async function loadResepMenuUI() {
 async function tambahBahanKeResep() {
     const idMenu = document.getElementById('resep-produk-id').value;
     const idBahan = document.getElementById('resep-tambah-bahan').value;
-    const qty = parseFloat(document.getElementById('resep-tambah-qty').value);
+    const qtyKotor = parseFloat(document.getElementById('resep-tambah-qty').value);
+    const hasilJadi = parseFloat(document.getElementById('resep-tambah-hasil').value) || 1;
 
-    if(!idMenu || !idBahan || !qty) {
-        alert('Pilih Menu, Bahan Baku, dan masukkan Jumlah!'); return;
+    if(!idMenu || !idBahan || !qtyKotor) {
+        alert('Pilih Menu, Bahan Baku, dan masukkan Takaran Pakai!'); return;
     }
+
+    const qty = qtyKotor / hasilJadi;
 
     const { error } = await _supabase.from('resep_menu').insert([{
         id_produk: idMenu,
@@ -11024,6 +11034,10 @@ async function prosesBOMDanHPP(detailItems, idOrderDB) {
         if(idOrderDB && totalHPPOrder > 0) {
             await _supabase.from('orders').update({ total_hpp: totalHPPOrder }).eq('id', idOrderDB);
         }
+        
+        // Auto update stok & hpp menu sendiri setelah bahan terpakai
+        await hitungUlangStokMenuSendiri();
+        
     } catch(e) {
         console.error('Error prosesBOMDanHPP:', e);
     }
@@ -11358,6 +11372,57 @@ Terima kasih atas kerja samanya!`;
             // --- AKHIR NOTIFIKASI WA ---
         }
     }
+
+// --- AUTO STOK PRODUK SENDIRI ---
+async function hitungUlangStokMenuSendiri() {
+    try {
+        console.log("Mulai hitungUlangStokMenuSendiri...");
+        // 1. Ambil semua menu produk sendiri
+        const { data: semuaMenu, error: errMenu } = await _supabase.from('menu').select('id, nama, mitra_id');
+        if(errMenu || !semuaMenu) return;
+
+        const menuSendiri = semuaMenu.filter(m => !m.mitra_id || m.mitra_id === 'null' || m.mitra_id === '');
+
+        for (let m of menuSendiri) {
+            // 2. Ambil BOM (Resep) dari menu ini
+            const { data: bom, error: errBom } = await _supabase
+                .from('resep_menu')
+                .select('id_bahan, jumlah_butuh, bahan_baku(harga_beli_terakhir, stok_sekarang)')
+                .eq('id_produk', String(m.id));
+                
+            if(errBom || !bom || bom.length === 0) continue;
+            
+            let totalHPP = 0;
+            let maxPorsi = Infinity;
+
+            for (let b of bom) {
+                let qtyButuh = parseFloat(b.jumlah_butuh) || 0;
+                let hargaSatuan = parseFloat(b.bahan_baku?.harga_beli_terakhir) || 0;
+                let stokAda = parseFloat(b.bahan_baku?.stok_sekarang) || 0;
+                
+                if (qtyButuh > 0) {
+                    totalHPP += qtyButuh * hargaSatuan;
+                    let porsi = Math.floor(stokAda / qtyButuh);
+                    if (porsi < maxPorsi) maxPorsi = porsi;
+                }
+            }
+            
+            if (maxPorsi === Infinity || maxPorsi < 0) maxPorsi = 0;
+            
+            // 3. Update HPP dan Stok ke tabel menu
+            await _supabase.from('menu').update({
+                harga_beli: Math.round(totalHPP),
+                stok: maxPorsi
+            }).eq('id', m.id);
+        }
+        
+        // Refresh data table jika sedang buka
+        if (typeof loadMenuTable === 'function') loadMenuTable();
+        console.log("Auto-stok selesai dihitung.");
+    } catch(e) {
+        console.error('Error hitungUlangStokMenuSendiri:', e);
+    }
+}
 </script>
 
 </body>
