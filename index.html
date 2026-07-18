@@ -11000,6 +11000,7 @@ async function tambahBahanKeResep() {
         document.getElementById('resep-tambah-bahan').value = '';
         document.getElementById('resep-tambah-qty').value = '';
         loadResepMenuUI();
+        await hitungUlangStokMenuSendiri(); // Auto update stok & HPP setelah resep berubah
     }
 }
 
@@ -11007,6 +11008,7 @@ async function hapusItemResep(idResep) {
     if(!confirm('Yakin ingin menghapus komponen bahan ini dari resep?')) return;
     await _supabase.from('resep_menu').delete().eq('id_resep', idResep);
     loadResepMenuUI();
+    await hitungUlangStokMenuSendiri(); // Auto update stok & HPP setelah resep dihapus
 }
 
 async function prosesBOMDanHPP(detailItems, idOrderDB) {
