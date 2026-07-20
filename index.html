@@ -16,7 +16,7 @@
             window.location.reload(true);
         }
     </script>
-    
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
@@ -4051,6 +4051,46 @@
 </div>
 
 <script>
+    // Override default alert to use SweetAlert2
+    window.alert = function(message) {
+        Swal.fire({
+            text: message,
+            icon: 'info',
+            confirmButtonColor: '#1E4D3A',
+            confirmButtonText: 'Oke',
+            customClass: { popup: 'rounded-2xl', confirmButton: 'rounded-xl font-bold px-6 py-2' }
+        });
+    };
+    
+    window.asyncConfirm = async function(msg) {
+        const result = await Swal.fire({
+            text: msg,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#1E4D3A',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Ya',
+            cancelButtonText: 'Batal',
+            customClass: { popup: 'rounded-2xl', confirmButton: 'rounded-xl font-bold px-6 py-2', cancelButton: 'rounded-xl font-bold px-6 py-2' }
+        });
+        return result.isConfirmed;
+    };
+    
+    window.asyncPrompt = async function(msg, defaultVal='') {
+        const result = await Swal.fire({
+            text: msg,
+            input: 'text',
+            inputValue: defaultVal,
+            showCancelButton: true,
+            confirmButtonColor: '#1E4D3A',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Lanjut',
+            cancelButtonText: 'Batal',
+            customClass: { popup: 'rounded-2xl', confirmButton: 'rounded-xl font-bold px-6 py-2', cancelButton: 'rounded-xl font-bold px-6 py-2' }
+        });
+        return result.isConfirmed ? result.value : null;
+    };
+
     const SUPABASE_URL = "https://ghfnukejqcioulphszil.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_o9CmewmvcOhV-x5yin7qAQ_W4EKfGtw";
     const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -4877,7 +4917,7 @@
     }
 
     async function resetAllStok() {
-        const nilai = prompt('Reset stok semua menu menjadi berapa? (default 0)', '0');
+        const nilai = await asyncPrompt('Reset stok semua menu menjadi berapa? (default 0)', '0');
         if (nilai === null) return;
         const stokBaru = parseInt(nilai);
         if (isNaN(stokBaru) || stokBaru < 0) { showToast('Nilai stok tidak valid!', 'amber'); return; }
@@ -4891,7 +4931,7 @@
         const confirmMsg = terkunciCount > 0
             ? `Yakin ingin mereset STOK ${targets.length} menu (di luar ${terkunciCount} menu mitra yang sedang terkunci hari ini) menjadi ${stokBaru}?`
             : `Yakin ingin mereset STOK SEMUA MENU (${targets.length} menu) menjadi ${stokBaru}?`;
-        if (!confirm(confirmMsg)) return;
+        if (!(await asyncConfirm(confirmMsg))) return;
 
         const ids = targets.map(m => m.id);
         const { error } = await _supabase.from('menu').update({ stok: stokBaru }).in('id', ids);
@@ -5097,7 +5137,7 @@
         const mitraMenu = currentMenusCache.filter(m => m.mitra_wa);
         if (!mitraMenu.length) { showToast('Tidak ada menu mitra ditemukan.', 'amber'); return; }
 
-        if (!confirm(`Sinkronkan ${mitraMenu.length} menu mitra ke Portal Mitra?\n\nStok, status (Ready/Habis), harga, dan flash sale yang ditampilkan di tabel ini akan dikirim ke Supabase dan langsung terbaca oleh mitra.`)) return;
+        if (!(await asyncConfirm(`Sinkronkan ${mitraMenu.length} menu mitra ke Portal Mitra?\n\nStok, status (Ready/Habis), harga, dan flash sale yang ditampilkan di tabel ini akan dikirim ke Supabase dan langsung terbaca oleh mitra.`))) return;
 
         showToast(`⏳ Menyinkronkan ${mitraMenu.length} menu mitra...`, 'amber');
 
@@ -5237,7 +5277,7 @@
     }
 
     async function deleteMenu(id) {
-        if (!confirm('Yakin ingin menghapus menu ini?')) return;
+        if (!(await asyncConfirm('Yakin ingin menghapus menu ini?'))) return;
         await _supabase.from('menu').delete().eq('id', id);
         fetchMenuManagement();
     }
@@ -5548,7 +5588,7 @@
 
         const cancelBtn = document.getElementById('modal-btn-cancel');
         cancelBtn.onclick = async () => {
-            if (confirm(`Yakin ingin MEMBATALKAN pesanan ${order.order_id} milik ${order.member_name}?`)) {
+            if (await asyncConfirm(`Yakin ingin MEMBATALKAN pesanan ${order.order_id} milik ${order.member_name}?`)) {
                 await batalkanOrder(order.id, order.member_id, order.detail_items, isReward);
                 closeOrderModal();
             }
@@ -5654,7 +5694,7 @@
 
     // --- FUNGSI EDIT / HAPUS ITEM PESANAN OLEH ADMIN ---
     window.hapusItemOrder = async function(orderDbId, indexItem) {
-        if(!confirm("Yakin hapus item ini dari pesanan? Total harga akan disesuaikan otomatis.")) return;
+        if (!(await asyncConfirm("Yakin hapus item ini dari pesanan? Total harga akan disesuaikan otomatis."))) return;
         
         const order = currentOrdersCache.find(o => o.id == orderDbId);
         if(!order) return;
@@ -6097,8 +6137,8 @@
         renderCart();
     }
 
-    function clearCart() {
-        if (cartItems.length && !confirm('Kosongkan keranjang?')) return;
+    async function clearCart() {
+        if (cartItems.length && !(await asyncConfirm('Kosongkan keranjang?'))) return;
         cartItems = [];
         renderCart();
     }
@@ -7127,7 +7167,7 @@
         } catch(e) { console.error(e); }
     }
     async function hapusTransaksi(orderId) {
-        if (!confirm('Yakin ingin menghapus transaksi ini? Data yang dihapus tidak dapat dikembalikan.')) return;
+        if (!(await asyncConfirm('Yakin ingin menghapus transaksi ini? Data yang dihapus tidak dapat dikembalikan.'))) return;
         try {
             const { error } = await _supabase.from('orders').delete().eq('id', orderId);
             if (error) throw error;
@@ -8816,7 +8856,7 @@ Silakan cek detail laporan harian dan riwayat pembayaran Anda secara lengkap mel
     }
 
     async function batalOpenOrder(dbId, orderId) {
-        if (!confirm(`Batalkan pesanan ${orderId}?`)) return;
+        if (!(await asyncConfirm(`Batalkan pesanan ${orderId}?`))) return;
         const { error } = await _supabase.from('orders').update({ status: 'Batal' }).eq('id', dbId);
         if (error) { showToast('Gagal membatalkan!','amber'); return; }
         showToast(`🗑️ Pesanan ${orderId} dibatalkan.`,'amber');
@@ -9068,7 +9108,7 @@ Silakan cek detail laporan harian dan riwayat pembayaran Anda secara lengkap mel
         const today = _todayWIB();
         const btn = document.getElementById('btn-perbaiki-stok');
 
-        if (!confirm(`Perbaiki stok semua produk mitra sesuai jumlah "Masuk" yang sudah diinput hari ini (${today})?\n\nIni akan MENIMPA stok saat ini di Kelola Menu/Kasir dengan jumlah Masuk dari Konsinyasi. Pastikan stok ini belum dikurangi transaksi kasir yang seharusnya tetap dihitung.`)) return;
+        if (!(await asyncConfirm(`Perbaiki stok semua produk mitra sesuai jumlah "Masuk" yang sudah diinput hari ini (${today})?\n\nIni akan MENIMPA stok saat ini di Kelola Menu/Kasir dengan jumlah Masuk dari Konsinyasi. Pastikan stok ini belum dikurangi transaksi kasir yang seharusnya tetap dihitung.`))) return;
 
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memperbaiki...'; }
 
@@ -9377,8 +9417,8 @@ Silakan cek detail laporan harian dan riwayat pembayaran Anda secara lengkap mel
     /* ══════════════════════════════════════════════════════════════
        LOGOUT
     ══════════════════════════════════════════════════════════════ */
-    window.doLogout = function() {
-        if (!confirm('Yakin ingin keluar dari sistem kasir?')) return;
+    window.doLogout = async function() {
+        if (!(await asyncConfirm('Yakin ingin keluar dari sistem kasir?'))) return;
         clearSession();
         // Tutup semua modal yang mungkin terbuka
         ['modal-akun-admin','modal-setting-login'].forEach(id => {
@@ -10222,7 +10262,7 @@ Silakan cek detail laporan harian dan riwayat pembayaran Anda secara lengkap mel
             btnDelete.style.color = '#fff';
             btnDelete.style.border = 'none';
             btnDelete.onclick = async () => {
-                if (confirm(`Apakah Anda yakin ingin menghapus data laporan konsinyasi ${k.mitra_nama || 'mitra'} tanggal ${k.tanggal}?\n\nSemua data stok masuk & retur akan di-reset (dihapus dari DB) sehingga Anda atau mitra bisa menginput ulang kembali.`)) {
+                if (await asyncConfirm(`Apakah Anda yakin ingin menghapus data laporan konsinyasi ${k.mitra_nama || 'mitra'} tanggal ${k.tanggal}?\n\nSemua data stok masuk & retur akan di-reset (dihapus dari DB) sehingga Anda atau mitra bisa menginput ulang kembali.`)) {
                     btnDelete.disabled = true;
                     btnDelete.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menghapus...';
                     
@@ -10901,7 +10941,7 @@ async function simpanPengeluaran() {
 async function hapusPengeluaran() {
     const id = document.getElementById('pengeluaran-edit-id').value;
     if (!id) return;
-    if (!confirm('Yakin ingin menghapus data pengeluaran ini?')) return;
+    if (!(await asyncConfirm('Yakin ingin menghapus data pengeluaran ini?'))) return;
     const { error } = await _supabase.from('pengeluaran').delete().eq('id', id);
     if (error) { showToast('Gagal hapus: ' + (error.message||''), 'amber'); return; }
     tutupModalPengeluaran();
@@ -10950,9 +10990,9 @@ async function loadBahanBakuUI() {
 }
 
 async function promptTambahBahan() {
-    const nama = prompt('Masukkan nama bahan baku (contoh: Biji Kopi Full Arabica):');
+    const nama = await asyncPrompt('Masukkan nama bahan baku (contoh: Biji Kopi Full Arabica):');
     if(!nama) return;
-    const satuan = prompt('Masukkan satuan terkecil (contoh: gram, ml, pcs):');
+    const satuan = await asyncPrompt('Masukkan satuan terkecil (contoh: gram, ml, pcs):');
     if(!satuan) return;
 
     const { error } = await _supabase.from('bahan_baku').insert([{
@@ -10967,7 +11007,7 @@ async function promptTambahBahan() {
 }
 
 async function hapusBahan(id) {
-    if(!confirm('Yakin ingin menghapus bahan baku ini? Resep yang menggunakan bahan ini juga akan terhapus.')) return;
+    if (!(await asyncConfirm('Yakin ingin menghapus bahan baku ini? Resep yang menggunakan bahan ini juga akan terhapus.'))) return;
     await _supabase.from('bahan_baku').delete().eq('id_bahan', id);
     loadBahanBakuUI();
 }
@@ -11085,7 +11125,7 @@ async function tambahBahanKeResep() {
 }
 
 async function hapusItemResep(idResep) {
-    if(!confirm('Yakin ingin menghapus komponen bahan ini dari resep?')) return;
+    if (!(await asyncConfirm('Yakin ingin menghapus komponen bahan ini dari resep?'))) return;
     await _supabase.from('resep_menu').delete().eq('id_resep', idResep);
     loadResepMenuUI();
     await hitungUlangStokMenuSendiri(); // Auto update stok & HPP setelah resep dihapus
@@ -11626,7 +11666,7 @@ async function tambahkanKeFlashSale() {
 }
 
 async function hapusDariFlashSale(id) {
-    if (!confirm('Keluarkan menu ini dari program Flash Sale?')) return;
+    if (!(await asyncConfirm('Keluarkan menu ini dari program Flash Sale?'))) return;
     const { error } = await _supabase.from('menu').update({
         is_flash_sale: 0
     }).eq('id', id);
