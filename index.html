@@ -2223,7 +2223,7 @@
             data = concat(data, dashes(W));
 
             if (order.catatan) {
-                data = concat(data, line('Catatan: ' + order.catatan), dashes(W));
+                data = concat(data, line('Catatan: ' + cleanCatatan(order.catatan)), dashes(W));
             }
 
             const totalStr = isReward ? 'REWARD (Rp 0)' : 'Rp ' + order.total_harga.toLocaleString('id-ID');
@@ -4159,6 +4159,21 @@
     }
 
     // ─── TOAST NOTIFICATION ───
+    // Helper untuk Lalamove Data
+    function extractLalamoveData(catatan) {
+        if (!catatan) return null;
+        const match = catatan.match(/ \| LALAMOVE_DATA: (\{.*\})/);
+        if (match && match[1]) {
+            try { return JSON.parse(match[1]); } catch(e) { return null; }
+        }
+        return null;
+    }
+
+    function cleanCatatan(catatan) {
+        if (!catatan) return '';
+        return catatan.replace(/ \| LALAMOVE_DATA: \{.*\}/, '');
+    }
+
     function showToast(msg, type = 'green') {
         const t = document.getElementById('toast-notif');
         const tx = document.getElementById('toast-text');
@@ -5502,7 +5517,7 @@
                             <span class="order-name">${order.member_name}</span>
                             ${statusBadge}
                         </div>
-                        <div class="order-note">Catatan: ${order.catatan || '—'}</div>
+                        <div class="order-note">Catatan: ${cleanCatatan(order.catatan) || '-'}</div>
                     </div>
                     <div style="text-align:right;">
                         <div class="order-price${isReward ? ' reward' : ''}">${isReward ? 'FREE REWARD' : 'Rp ' + order.total_harga.toLocaleString('id-ID')}</div>
@@ -5547,7 +5562,7 @@
         document.getElementById('modal-member-name').innerHTML =
             `${order.member_name} <span style="font-size:12px;font-weight:400;opacity:.75;">(${order.member_wa})</span>`;
 
-        document.getElementById('modal-catatan-text').innerText = order.catatan || '—';
+        document.getElementById('modal-catatan-text').innerText = cleanCatatan(order.catatan) || '-';
 
         const itemsList = document.getElementById('modal-items-list');
         itemsList.innerHTML = order.detail_items.map((item, index) => `
@@ -5582,7 +5597,7 @@
 
             const menuListText = order.detail_items.map(item => `- ${item.nama} (x${item.qty})`).join('\n');
             const infoTotalHarga = isReward ? 'FREE (Klaim Reward Poin)' : `Rp ${order.total_harga.toLocaleString('id-ID')}`;
-            const waMessage = `Halo kak *${order.member_name}*,\n\nKami dari *Warunk Arsi* ingin mengonfirmasi pesanan kakak:\n\n*ID Pesanan:* ${order.order_id}\n*Rincian Menu:*\n${menuListText}\n\n*Catatan:* ${order.catatan ? order.catatan : '-'}\n\n*Total Nota:* ${infoTotalHarga}\n\nMohon kabari kami jika sudah sesuai ya kak. Terima kasih! 🙏✨`;
+            const waMessage = `Halo kak *${order.member_name}*,\n\nKami dari *Warunk Arsi* ingin mengonfirmasi pesanan kakak:\n\n*ID Pesanan:* ${order.order_id}\n*Rincian Menu:*\n${menuListText}\n\n*Catatan:* ${order.catatan ? cleanCatatan(order.catatan) : '-'}\n\n*Total Nota:* ${infoTotalHarga}\n\nMohon kabari kami jika sudah sesuai ya kak. Terima kasih! 🙏✨`;
             window.open(`https://api.whatsapp.com/send?phone=${cleanWa}&text=${encodeURIComponent(waMessage)}`, '_blank');
         };
 
@@ -5603,6 +5618,40 @@
         prosesBtn.onclick = async () => {
             prosesBtn.disabled = true;
             prosesBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memproses...';
+            
+            // Cek Lalamove Data
+            const lalamoveData = extractLalamoveData(order.catatan);
+            if (lalamoveData) {
+                try {
+                    const { data: edgeData, error: edgeErr } = await _supabase.functions.invoke('lalamove-api', {
+                        body: {
+                            action: 'create-order',
+                            quotationId: lalamoveData.qid,
+                            recipientName: order.member_name,
+                            recipientPhone: order.member_wa,
+                            orderId: order.order_id,
+                            lat: lalamoveData.lat,
+                            lng: lalamoveData.lng,
+                            address: lalamoveData.addr
+                        }
+                    });
+                    
+                    if (edgeErr || (edgeData && edgeData.error) || (typeof edgeData === 'string')) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Peringatan Lalamove',
+                            html: 'Gagal memanggil kurir Lalamove secara otomatis.<br><br><i>' + 
+                                  (edgeErr ? edgeErr.message : JSON.stringify(edgeData)) + 
+                                  '</i><br><br>Pesanan tetap berlanjut, namun <b>Anda harus memanggil kurir secara manual!</b>'
+                        });
+                    } else {
+                        showToast('Kurir Lalamove berhasil dipanggil!', 'green');
+                    }
+                } catch (err) {
+                    console.error("Lalamove Invoke Error", err);
+                }
+            }
+
             await _supabase.from('orders').update({ status: 'Diproses' }).eq('id', order.id);
             
             // --- SISIPAN WA PROSES ---
@@ -6276,7 +6325,7 @@
         }));
 
         // Parse metode bayar & catatan bersih dari catatan order
-        const catatanRaw = o.catatan || '';
+        const catatanRaw = cleanCatatan(o.catatan || '');
         let metode = 'tunai', dpNominal = 0;
         const dpMatch = catatanRaw.match(/\[DP Rp ([\d.,]+) \/ sisa Rp ([\d.,]+)\]/);
         const antrianMatch = catatanRaw.match(/\[Antrian-([A-Z]+)\]/);
@@ -7025,7 +7074,7 @@
         document.getElementById('lp-modal-waktu').textContent      = tgl;
         document.getElementById('lp-modal-metode').textContent     = metodeLabel;
         document.getElementById('lp-modal-metode').style.color     = metodeColor;
-        document.getElementById('lp-modal-catatan').textContent    = o.catatan || '-';
+        document.getElementById('lp-modal-catatan').textContent    = cleanCatatan(o.catatan) || '-';
 
         // Item list
         document.getElementById('lp-modal-items').innerHTML = items.length
@@ -7111,7 +7160,7 @@
                 const finalTotal = subtotal + finalBiayaLain;
                 if (typeof cetakStrukManual === 'function') {
                     const metode = o.metode_bayar || (o.sumber === 'manual' ? 'tunai' : 'online');
-                    cetakStrukManual(o.order_id, o.member_name || 'Walk-In', items, finalTotal, metode, 0, 0, o.catatan || '');
+                    cetakStrukManual(o.order_id, o.member_name || 'Walk-In', items, finalTotal, metode, 0, 0, cleanCatatan(o.catatan || ''));
                 } else {
                     window.print();
                 }
@@ -10851,7 +10900,7 @@ function _renderPengeluaranTable(data) {
             <td style="padding:10px 8px;font-size:11px;color:var(--gray-500);white-space:nowrap;">${tgl}</td>
             <td style="padding:10px 8px;font-weight:600;font-size:12px;color:var(--gray-800);">
                 ${_esc(r.keterangan)}
-                ${r.catatan ? `<div style="font-size:10px;color:var(--gray-400);margin-top:1px;">${_esc(r.catatan)}</div>` : ''}
+                ${r.catatan ? `<div style="font-size:10px;color:var(--gray-400);margin-top:1px;">${_esc(cleanCatatan(r.catatan))}</div>` : ''}
             </td>
             <td style="padding:10px 8px;">
                 <span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:99px;background:var(--gray-100);color:${katColor};">${_esc(r.kategori||'—')}</span>
