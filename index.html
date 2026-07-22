@@ -6600,6 +6600,15 @@
         const btn = document.getElementById('btn-proses-order');
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Memproses...'; }
 
+        // Pre-open popup untuk struk agar tidak diblokir browser (khususnya mobile)
+        const printWindow = window.open('', '_blank', 'width=300,height=600,toolbar=0,menubar=0,scrollbars=0');
+        if (!printWindow) { 
+            alert('Popup diblokir browser. Izinkan popup untuk pos.warunkarsi.com');
+            if (btn) { btn.disabled = false; btn.innerHTML = 'Coba Lagi'; }
+            return;
+        }
+        printWindow.document.write('<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:20px;">Memproses struk...</body></html>');
+
         const namaPelanggan = document.getElementById('kasir-nama-pelanggan')?.value.trim() || 'Walk-In';
         const catatan = document.getElementById('kasir-catatan')?.value.trim() || '';
         const isDp = selectedPayment === 'dp';
@@ -6621,6 +6630,7 @@
 
             if (btn) { btn.disabled = false; }
             if (updErr) {
+                if (printWindow) printWindow.close();
                 _setEditButtonLabels(true);
                 showToast('Gagal memperbarui pesanan!', 'amber');
                 console.error('UPDATE ERROR:', updErr);
@@ -6628,7 +6638,7 @@
             }
 
             if (!isDp) {
-                await decrementStok(detailItems);
+                decrementStok(detailItems).catch(e => console.error(e));
                 // Update terjual di konsinyasi_stok agar laporan mitra terupdate realtime
                 _updateKonsinyasiTerjual(detailItems);
             }
@@ -6638,10 +6648,10 @@
             const orderIdEdit = editingOrderIdText;
             const kembalianEdit = diterima - total;
             if (isDp) {
-                cetakStrukManual(orderIdEdit, namaPelanggan, detailItems, total, 'dp', dpNominal, total - dpNominal, catatan, dpNominal);
+                cetakStrukManual(orderIdEdit, namaPelanggan, detailItems, total, 'dp', dpNominal, total - dpNominal, catatan, dpNominal, printWindow);
                 showToast(`📋 Pesanan ${orderIdEdit} diperbarui!`, 'amber');
             } else {
-                cetakStrukManual(orderIdEdit, namaPelanggan, detailItems, total, selectedPayment, diterima, kembalianEdit, catatan);
+                cetakStrukManual(orderIdEdit, namaPelanggan, detailItems, total, selectedPayment, diterima, kembalianEdit, catatan, null, printWindow);
                 showToast(`✅ Pesanan ${orderIdEdit} diperbarui & diselesaikan!`);
             }
 
@@ -6673,8 +6683,22 @@
 
         const { data: insertedData, error } = await _supabase.from('orders').insert([insertPayload]).select();
         
+        if (error) { 
+            if (printWindow) printWindow.close();
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = isDp
+                    ? '<i class="fa-solid fa-hand-holding-dollar"></i> Simpan Pesanan Pre-Order (DP)'
+                    : '<i class="fa-solid fa-check-circle"></i> Proses &amp; Selesaikan Transaksi';
+            }
+            showToast('Gagal menyimpan transaksi!', 'amber'); 
+            console.error('INSERT ERROR:', error);
+            alert('❌ Gagal simpan transaksi!\n\nDetail error:\n' + (error.message || JSON.stringify(error)));
+            return; 
+        }
+
         if (insertedData && insertedData[0] && insertPayload.status === 'Selesai') {
-            await prosesBOMDanHPP(detailItems, insertedData[0].id);
+            prosesBOMDanHPP(detailItems, insertedData[0].id).catch(e => console.error(e));
         }
 
         if (btn) {
@@ -6684,16 +6708,9 @@
                 : '<i class="fa-solid fa-check-circle"></i> Proses &amp; Selesaikan Transaksi';
         }
 
-        if (error) { 
-            showToast('Gagal menyimpan transaksi!', 'amber'); 
-            console.error('INSERT ERROR:', error);
-            alert('❌ Gagal simpan transaksi!\n\nDetail error:\n' + (error.message || JSON.stringify(error)));
-            return; 
-        }
-
         // Hanya kurangi stok saat jam operasional (bukan pre-order)
         if (!isDp) {
-            await decrementStok(detailItems);
+            decrementStok(detailItems).catch(e => console.error(e));
             // Update terjual di konsinyasi_stok agar laporan mitra terupdate realtime
             _updateKonsinyasiTerjual(detailItems);
         }
@@ -6703,12 +6720,12 @@
         // Print struk
         const kembalian = diterima - total;
         if (isDp) {
-            cetakStrukManual(orderId, namaPelanggan, detailItems, total, 'dp', dpNominal, total - dpNominal, catatan, dpNominal);
+            cetakStrukManual(orderId, namaPelanggan, detailItems, total, 'dp', dpNominal, total - dpNominal, catatan, dpNominal, printWindow);
             showToast(`📋 Pre-Order ${orderId} disimpan! DP Rp ${dpNominal.toLocaleString('id-ID')}`,'amber');
             refreshOpenOrdersBadge();
             if (_openOrdersVisible) fetchOpenOrders();
         } else {
-            cetakStrukManual(orderId, namaPelanggan, detailItems, total, selectedPayment, diterima, kembalian, catatan);
+            cetakStrukManual(orderId, namaPelanggan, detailItems, total, selectedPayment, diterima, kembalian, catatan, null, printWindow);
             showToast(`✅ Transaksi ${orderId} selesai! Total Rp ${total.toLocaleString('id-ID')}`);
         }
 
@@ -6786,7 +6803,7 @@
         </body></html>`;
     }
 
-    function cetakStrukManual(orderId, nama, items, total, metode, diterima, kembalian, catatan, dpNominal) {
+    function cetakStrukManual(orderId, nama, items, total, metode, diterima, kembalian, catatan, dpNominal, printWindow) {
         const now = new Date();
         const tgl = now.toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'numeric'});
         const jam = now.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
@@ -6842,8 +6859,9 @@
             <br>
         `;
 
-        const popup = window.open('', '_blank', 'width=300,height=600,toolbar=0,menubar=0,scrollbars=0');
+        const popup = printWindow || window.open('', '_blank', 'width=300,height=600,toolbar=0,menubar=0,scrollbars=0');
         if (!popup) { alert('Popup diblokir browser. Izinkan popup untuk pos.warunkarsi.com'); return; }
+        popup.document.open();
         popup.document.write(_buatHtmlStruk(konten));
         popup.document.close();
         popup.focus();
