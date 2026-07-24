@@ -5683,9 +5683,9 @@
         actionBtn.innerHTML = isReward
             ? '<i class="fa-solid fa-gift"></i> Selesai &amp; Berikan'
             : '<i class="fa-solid fa-check"></i> Selesai &amp; Beri Poin';
-        actionBtn.onclick = async () => {
-            await selesaikanOrder(order.id, order.member_id, order.total_harga, isReward);
+        actionBtn.onclick = () => {
             closeOrderModal();
+            selesaikanOrder(order.id, order.member_id, order.total_harga, isReward).catch(console.error);
         };
 
         document.getElementById('modal-detail-pesanan').classList.add('open');
@@ -5867,7 +5867,7 @@
         const { data: theOrder } = await _supabase.from('orders').select('detail_items').eq('id', dbId).single();
         await _supabase.from('orders').update({ status: 'Selesai' }).eq('id', dbId);
         if (theOrder && theOrder.detail_items) {
-            await prosesBOMDanHPP(theOrder.detail_items, dbId);
+            prosesBOMDanHPP(theOrder.detail_items, dbId).catch(e => console.error(e));
         }
 
         // --- SISIPAN WA SELESAI & BERI POIN ---
@@ -5898,7 +5898,7 @@
 
         // Kurangi stok untuk setiap item order online yang diselesaikan
         if (currentModalOrder && currentModalOrder.detail_items) {
-            await decrementStok(currentModalOrder.detail_items);
+            decrementStok(currentModalOrder.detail_items).catch(e => console.error(e));
             // Update terjual di konsinyasi_stok agar laporan mitra ikut terekam
             // realtime untuk transaksi Order Online (sama seperti Kasir Manual)
             _updateKonsinyasiTerjual(currentModalOrder.detail_items);
@@ -5914,7 +5914,8 @@
         } else {
             showToast('🎁 Klaim Reward selesai!', 'amber');
         }
-        loadData();
+        fetchOrders();
+        fetchMembers();
     }
 
     function printStrukOnline() {
